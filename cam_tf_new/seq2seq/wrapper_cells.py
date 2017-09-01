@@ -3,7 +3,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from tensorflow.python.ops.rnn_cell import RNNCell
+from cam_tf_new.rnn.rnn_cell import RNNCell
 
 from tensorflow.python.ops import variable_scope as vs
 from tensorflow.python.ops import array_ops

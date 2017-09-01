@@ -69,15 +69,14 @@ from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import embedding_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import nn_ops
-from tensorflow.python.ops import rnn
-from tensorflow.python.ops import rnn_cell
 from tensorflow.python.ops import variable_scope
 from tensorflow.python.util import nest
 
 # TODO(ebrevdo): Remove once _linear is fully deprecated.
-linear = rnn_cell._linear  # pylint: disable=protected-access
 
+from cam_tf_original.rnn import rnn, rnn_cell
 from cam_tf_original.seq2seq.wrapper_cells import BOWCell
+linear = rnn_cell._linear  # pylint: disable=protected-access
 
 from tensorflow.python.ops.math_ops import tanh
 
@@ -636,7 +635,6 @@ def attention_decoder(decoder_inputs,
           s = s * src_mask
         a = nn_ops.softmax(s)
 
-        from cam_tf_original.seq2seq.wrapper_cells import BOWCell
         if isinstance(cell, BOWCell) and \
           (is_LSTM_cell(cell.get_cell()) or \
            is_LSTM_cell_with_dropout(cell.get_cell()) or \
@@ -959,6 +957,7 @@ def embedding_attention_seq2seq(encoder_inputs,
       encoder_outputs, encoder_state, encoder_state_bw = rnn.bidirectional_rnn(encoder_cell_fw, encoder_cell_bw,
                                  encoder_inputs, dtype=dtype,
                                  sequence_length=sequence_length,
+                                 bucket_length=bucket_length,
                                  legacy=legacy)
 
       logging.debug("Bidirectional state size=%d" % cell.state_size) # this shows double the size for lstms
@@ -967,8 +966,8 @@ def embedding_attention_seq2seq(encoder_inputs,
         cell, embedding_classes=num_encoder_symbols,
         embedding_size=embedding_size, initializer=initializer)
       encoder_outputs, encoder_state = rnn.rnn(
-        encoder_cell, rnn._reverse_seq(encoder_inputs, sequence_length), dtype=dtype, sequence_length=sequence_length)
-      logging.debug("Unidirectional state size={}".format(cell.state_size))
+        encoder_cell, encoder_inputs, dtype=dtype, sequence_length=sequence_length, bucket_length=bucket_length, reverse=True)
+      logging.debug("Unidirectional state size=%d" % cell.state_size)
     elif encoder == "bow":
       if keep_prob < 1:
         logging.info("Applying dropout to input embeddings")

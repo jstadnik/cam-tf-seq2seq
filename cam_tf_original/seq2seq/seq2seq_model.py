@@ -26,6 +26,7 @@ from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
 
 from cam_tf_original.utils import data_utils
+from cam_tf_original.rnn import rnn_cell
 from cam_tf_original.seq2seq.wrapper_cells import BidirectionalRNNCell, BOWCell
 from cam_tf_original.seq2seq.seq2seq import embedding_attention_seq2seq, model_with_buckets
 import logging
@@ -140,13 +141,13 @@ class Seq2SeqModel(object):
     if use_lstm:
       logging.info("Using LSTM cells of size={}".format(hidden_size))
       if initializer:
-        single_cell = tf.nn.rnn_cell.LSTMCell(hidden_size, initializer=initializer)
+        single_cell = rnn_cell.LSTMCell(hidden_size, initializer=initializer)
       else:
         # NOTE: to use peephole connections, cell clipping or a projection layer, use LSTMCell instead
-        single_cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_size)
+        single_cell = rnn_cell.BasicLSTMCell(hidden_size)
     else:
       logging.info("Using GRU cells of size={}".format(hidden_size))
-      single_cell = tf.nn.rnn_cell.GRUCell(hidden_size)
+      single_cell = rnn_cell.GRUCell(hidden_size)
     cell = single_cell
 
     if encoder == "bidirectional":
@@ -158,16 +159,16 @@ class Seq2SeqModel(object):
       logging.info("BOW model")
       if not forward_only and use_lstm and keep_prob < 1:
         logging.info("Adding dropout wrapper around lstm cells")
-        single_cell = tf.nn.rnn_cell.DropoutWrapper(
+        single_cell = rnn_cell.DropoutWrapper(
             single_cell, output_keep_prob=keep_prob)
       if num_layers > 1:
         logging.info("Model with %d layers for the decoder" % num_layers)
-        cell = BOWCell(tf.nn.rnn_cell.MultiRNNCell([single_cell] * num_layers))
+        cell = BOWCell(rnn_cell.MultiRNNCell([single_cell] * num_layers))
       else:
         cell = BOWCell(single_cell)
     elif num_layers > 1:
       logging.info("Model with %d layers" % num_layers)
-      cell = tf.nn.rnn_cell.MultiRNNCell([single_cell] * num_layers)
+      cell = rnn_cell.MultiRNNCell([single_cell] * num_layers)
 
 
     # The seq2seq function: we use embedding for the input and attention.

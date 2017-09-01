@@ -9,6 +9,8 @@ counterparts in tensorflow.models.rnn.seq2seq.
 
 from cam_tf_new.seq2seq.engine import Engine, TrainGraph, EncodingGraph,\
     SingleStepDecodingGraph
+from cam_tf_new.rnn import rnn
+from cam_tf_new.rnn import rnn_cell
 from cam_tf_new.seq2seq.seq2seq_model import Seq2SeqModel
 from cam_tf_new.seq2seq.wrapper_cells import BidirectionalRNNCell, BOWCell
 

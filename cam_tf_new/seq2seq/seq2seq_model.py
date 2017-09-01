@@ -27,6 +27,7 @@ import tensorflow as tf
 
 from cam_tf_new.utils import data_utils
 from cam_tf_new.seq2seq.wrapper_cells import BidirectionalRNNCell, BOWCell
+from cam_tf_new.rnn import rnn_cell
 import cam_tf_new.seq2seq.seq2seq as s2s
 import logging
 from tensorflow.core.protobuf import saver_pb2
@@ -169,17 +170,17 @@ class Seq2SeqModel(object):
       if use_lstm:
         logging.info("Using LSTM cells")
         if initializer:
-          single_cell = tf.nn.rnn_cell.LSTMCell(n_hidden, initializer=initializer)
+          single_cell = rnn_cell.LSTMCell(n_hidden, initializer=initializer)
         else:
           # to use peephole connections, cell clipping or a projection layer, use LSTMCell
-          single_cell = tf.nn.rnn_cell.BasicLSTMCell(n_hidden)
+          single_cell = rnn_cell.BasicLSTMCell(n_hidden)
       else:
         logging.info("Using GRU cells")
-        single_cell = tf.nn.rnn_cell.GRUCell(n_hidden)
+        single_cell = rnn_cell.GRUCell(n_hidden)
       cell = single_cell
       if not forward_only and use_lstm and keep_prob < 1:
         logging.info("Adding dropout wrapper around lstm cells")
-        single_cell = tf.nn.rnn_cell.DropoutWrapper(single_cell, output_keep_prob=keep_prob)
+        single_cell = rnn_cell.DropoutWrapper(single_cell, output_keep_prob=keep_prob)
       if encoder == "bidirectional":
         logging.info("Bidirectional model")
         if init_backward:
@@ -189,12 +190,12 @@ class Seq2SeqModel(object):
         logging.info("BOW model")
         if num_layers > 1:
           logging.info("Model with %d layers for the decoder" % num_layers)
-          cell = BOWCell(tf.nn.rnn_cell.MultiRNNCell([single_cell] * num_layers))
+          cell = BOWCell(rnn_cell.MultiRNNCell([single_cell] * num_layers))
         else:
           cell = BOWCell(single_cell)
       elif num_layers > 1:
         logging.info("Model with %d layers" % num_layers)
-        cell = tf.nn.rnn_cell.MultiRNNCell([single_cell] * num_layers)
+        cell = rnn_cell.MultiRNNCell([single_cell] * num_layers)
       return cell
 
     cell = get_cell(hidden_size)

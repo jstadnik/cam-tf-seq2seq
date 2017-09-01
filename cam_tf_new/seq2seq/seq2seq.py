@@ -44,7 +44,7 @@ one of them, others should be easy to substitute.
     e.g., if you want to write a model that generates captions for images).
   - rnn_decoder: The basic decoder based on a pure RNN.
   - attention_decoder: A decoder that uses the attention mechanism.
- 
+
 * Losses.
   - sequence_loss: Loss for a sequence model returning average log-perplexity.
   - sequence_loss_by_example: As above, but not averaging over all examples.
@@ -61,6 +61,9 @@ from __future__ import print_function
 from six.moves import xrange  # pylint: disable=redefined-builtin
 from six.moves import zip     # pylint: disable=redefined-builtin
 
+from cam_tf_new.seq2seq.wrapper_cells import BOWCell
+from cam_tf_new.rnn import rnn
+from cam_tf_new.rnn import rnn_cell
 from tensorflow.python import shape
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
@@ -69,15 +72,11 @@ from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import embedding_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import nn_ops
-from tensorflow.python.ops import rnn
-from tensorflow.python.ops import rnn_cell
 from tensorflow.python.ops import variable_scope
 from tensorflow.python.util import nest
 
 # TODO(ebrevdo): Remove once _linear is fully deprecated.
 linear = rnn_cell._linear  # pylint: disable=protected-access
-
-from cam_tf_new.seq2seq.wrapper_cells import BOWCell
 
 from tensorflow.python.ops.math_ops import tanh
 
@@ -543,9 +542,11 @@ def embedding_rnn_autoencoder_seq2seq(encoder_inputs, decoder_inputs, cell,
           cell, embedding_classes=num_symbols,
           embedding_size=embedding_size, initializer=initializer)
         _, encoder_state = rnn.rnn(
-          encoder_cell, rnn._reverse_seq(encoder_inputs, sequence_length),
-          dtype=dtype, sequence_length=sequence_length)
+          encoder_cell, encoder_inputs, dtype=dtype,
+          sequence_length=sequence_length, bucket_length=bucket_length,
+          reverse=True)
         initial_state = encoder_state
+
     else:
       if init_backward or encoder == 'reverse':
         cell = cell.get_bw_cell()
@@ -631,9 +632,9 @@ def embedding_rnn_vae_seq2seq(encoder_inputs, decoder_inputs, cell,
         cell, embedding_classes=num_symbols,
         embedding_size=embedding_size, initializer=initializer)
       _, encoder_out_state = rnn.rnn(
-        encoder_cell, rnn._reverse_seq(encoder_inputs, sequence_length),
-        dtype=dtype, sequence_length=sequence_length)
-   
+        enc_cell, encoder_inputs, dtype=dtype,
+        sequence_length=sequence_length, bucket_length=bucket_length,
+        reverse=True)    
     if output_projection is None:
       dec_cell = rnn_cell.OutputProjectionWrapper(dec_cell, num_symbols)
     
@@ -1310,8 +1311,7 @@ def embedding_attention_seq2seq(encoder_inputs,
         cell, embedding_classes=num_encoder_symbols,
         embedding_size=embedding_size, initializer=initializer)
       encoder_outputs, encoder_state = rnn.rnn(
-        encoder_cell, rnn._reverse_seq(encoder_inputs, sequence_length),
-        dtype=dtype, sequence_length=sequence_length)
+        encoder_cell, encoder_inputs, dtype=dtype, sequence_length=sequence_length, bucket_length=bucket_length, reverse=True)
       #logging.debug("Unidirectional state size=%d" % cell.state_size)
     elif encoder == "bow":
       if keep_prob < 1:
