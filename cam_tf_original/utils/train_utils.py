@@ -233,7 +233,7 @@ def decode_dev(config, model, current_bleu):
   ref = config['dev_trg_idx']
   g2 = tf.Graph() # use a separate graph to avoid variable collision when loading model for decoding
   with g2.as_default() as g:
-    from translate.decode import decode
+    from cam_tf_original.decode import decode
     decode(config, input=inp, output=out, max_sentences=config['eval_bleu_size'])
   bleu = eval_set(out, ref)
 

@@ -16,8 +16,8 @@ from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
 
 if __name__ == "__main__":
-  from translate.train import FLAGS as train_flags # get default model settings from train.py
-from translate.utils import data_utils, model_utils
+  from cam_tf_original.train import FLAGS as train_flags # get default model settings from train.py
+from cam_tf_original.utils import data_utils, model_utils
 
 # Decoder settings
 tf.app.flags.DEFINE_string("test_src_idx", "/tmp/in.txt", "An integer-encoded input file")

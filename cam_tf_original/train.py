@@ -14,7 +14,7 @@ import time, datetime
 import logging, pickle
 
 import tensorflow as tf
-from translate.utils import data_utils, train_utils, model_utils
+from cam_tf_original.utils import data_utils, train_utils, model_utils
 
 tf.app.flags.DEFINE_string("config_file", None, "Pass options in a config file (will override conflicting command line settings)")
 
@@ -258,7 +258,7 @@ def train(config):
 def self_test():
   """Test the translation model."""
   import random
-  from tensorflow.models.rnn.translate.seq2seq import seq2seq_model
+  from cam_tf_original.seq2seq import seq2seq_model
   with tf.Session() as sess:
     print("Self-test for neural translation model.")
     # Create model with vocabularies of 10, 2 small buckets, 2 layers of 32.

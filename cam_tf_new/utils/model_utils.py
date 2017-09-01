@@ -1,12 +1,13 @@
 from __future__ import print_function
 import data_utils
-from translate.seq2seq import seq2seq_model, tf_seq2seq
+from cam_tf_new.seq2seq import seq2seq_model, tf_seq2seq
 from tensorflow.python.platform import gfile
 import tensorflow as tf
 import os,re
 import logging
 import numpy
 from tensorflow.python.ops import array_ops
+
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
@@ -26,18 +27,17 @@ def read_config(config_file, config):
   logging.info("Settings from tensorflow config file:")    
   with open(config_file) as f:
     for line in f:
-      if line.strip():
-        key,value = line.strip().split(": ")
-        if value == "None":
-          value = None
-        elif is_bool(value):
-          value = str2bool(value)      
-        elif re.match("^\d+$", value):
-          value = int(value)
-        elif re.match("^[\d\.]+$", value):
-          value = float(value)
-        config[key] = value
-        logging.info("{}: {}".format(key, value))
+      key,value = line.strip().split(": ")
+      if value == "None":
+        value = None
+      elif is_bool(value):
+        value = str2bool(value)      
+      elif re.match("^\d+$", value):
+        value = int(value)
+      elif re.match("^[\d\.]+$", value):
+        value = float(value)
+      config[key] = value
+      logging.info("{}: {}".format(key, value))
 
 def process_args(FLAGS, train=True, greedy_decoder=False):
   config = dict()
@@ -59,25 +59,33 @@ def process_args(FLAGS, train=True, greedy_decoder=False):
   if config['num_symm_buckets'] > 0:
     global _buckets
     _buckets = make_buckets(config['num_symm_buckets'], config['max_sequence_length'],
-                            config['add_src_eos'], train, greedy_decoder)
-
+                            config['add_src_eos'], train, greedy_decoder, max_trg_len=config['max_target_length'])
+  
   if config['no_pad_symbol']:
     data_utils.no_pad_symbol()
     logging.info("UNK_ID=%d" % data_utils.UNK_ID)
     logging.info("PAD_ID=%d" % data_utils.PAD_ID)
-    
+  
+  config['grammar'] = data_utils.prepare_grammar(
+    config['grammar_def'], config['use_trg_grammar_mask'])
   return config
 
-def make_buckets(num_buckets, max_seq_len=50, add_src_eos=True, train=True, greedy_decoder=False):
+
+def make_buckets(num_buckets, max_seq_len=50, add_src_eos=True, train=True, greedy_decoder=False, max_trg_len=0):
   # Bucket length: +1 for EOS, +1 for GO symbol
   src_offset = 0 if not add_src_eos else 1
+  trg_offset = 2
+  if greedy_decoder and not train:
+    trg_offset = 5
+  if max_trg_len and max_trg_len > max_seq_len:
+    trg_offset += max_trg_len - max_seq_len
   if train:
     # Buckets for training
-    buckets = [ (int(max_seq_len/num_buckets)*i + src_offset, int(max_seq_len/num_buckets)*i + 2) for i in range(1,num_buckets+1) ]
+    buckets = [ (int(max_seq_len/num_buckets)*i + src_offset, int(max_seq_len/num_buckets)*i + trg_offset) for i in range(1,num_buckets+1) ]
   else:
     if greedy_decoder:
       # Buckets for decoding with training graph (greedy decoder)
-      buckets = [ (int(max_seq_len/num_buckets)*i + src_offset, int(max_seq_len/num_buckets)*i + 5) for i in range(1,num_buckets+1) ]
+      buckets = [ (int(max_seq_len/num_buckets)*i + src_offset, int(max_seq_len/num_buckets)*i + trg_offset) for i in range(1,num_buckets+1) ]
     else:
       # Buckets for decoding with single-step decoding graph: input length=1 on the target side)
       buckets = [ (int(max_seq_len/num_buckets)*i + src_offset, 1) for i in range(1,num_buckets+1) ]
@@ -85,10 +93,14 @@ def make_buckets(num_buckets, max_seq_len=50, add_src_eos=True, train=True, gree
   logging.info("Use buckets={}".format(buckets))
   return buckets
 
-def make_bucket(src_length, greedy_decoder=False):
+
+def make_bucket(src_length, greedy_decoder=False, max_trg_len=0):
+  trg_offset = 5
+  if max_trg_len and max_trg_len > src_length:
+    trg_offset += max_trg_len - src_length
   if greedy_decoder:
     # Additional bucket for decoding with training graph
-    return (src_length, src_length + 5)
+    return (src_length, src_length + trg_offset)
   else:
     # Additional bucket for decoding with single-step decoding graph: input length=1 on the target side)
     return (src_length, 1)
@@ -113,14 +125,14 @@ def get_initializer(config):
     return initializer
   return None
 
-def create_model(session, config, forward_only, rename_variable_prefix=None, buckets=None):
+def create_model(session, config, forward_only, rename_variable_prefix=None, buckets=None, hidden=False):
   """Create or load translation model for training or greedy decoding"""
   if not forward_only:
     logging.info("Creating %d layers of %d units, encoder=%s." % (config['num_layers'], config['hidden_size'], config['encoder']))
   if not buckets:
     buckets = _buckets
-  model = get_Seq2SeqModel(config, buckets, forward_only, rename_variable_prefix)
-
+  model = get_Seq2SeqModel(config, buckets, forward_only,
+                           rename_variable_prefix, hidden=hidden)
   model_path = get_model_path(config)
   if model_path and tf.gfile.Exists(model_path):
     logging.info("Reading model parameters from %s" % model_path)
@@ -132,7 +144,7 @@ def create_model(session, config, forward_only, rename_variable_prefix=None, buc
 
 def load_model(session, config):
   """Load translation model with single-step graph for decoding"""
-  buckets = make_buckets(config['num_symm_buckets'], config['max_sequence_length'], config['add_src_eos'], train=False)
+  buckets = make_buckets(config['num_symm_buckets'], config['max_sequence_length'], config['add_src_eos'], train=False, max_trg_len=config['max_target_length'])
   model = get_singlestep_Seq2SeqModel(config, buckets)
   training_graph = model.create_training_graph() # Needed for loading variables
   encoding_graph = model.create_encoding_graph()
@@ -147,7 +159,7 @@ def load_model(session, config):
 
   return model, training_graph, encoding_graph, single_step_decoding_graph, buckets
 
-def get_Seq2SeqModel(config, buckets, forward_only, rename_variable_prefix=None):
+def get_Seq2SeqModel(config, buckets, forward_only, rename_variable_prefix=None, hidden=False):
   return seq2seq_model.Seq2SeqModel(
       config['src_vocab_size'], config['trg_vocab_size'], buckets,
       config['embedding_size'], config['hidden_size'],
@@ -163,7 +175,22 @@ def get_Seq2SeqModel(config, buckets, forward_only, rename_variable_prefix=None)
       keep_prob=config['keep_prob'],
       initializer=get_initializer(config),
       rename_variable_prefix=rename_variable_prefix,
-      legacy=config['legacy'])
+      legacy=config['legacy'],
+      hidden=hidden,
+      latent_size=config['latent_size'],
+      annealing=config['annealing'],
+      anneal_steps=config['kl_annealing_steps'],
+      word_keep_prob=config['word_keep_prob'],
+      scheduled_sample=config['scheduled_sample'],
+      scheduled_sample_steps=config['scheduled_sample_steps'],
+      kl_min=config['kl_min'],
+      concat_encoded=config['concat_encoded'],
+      seq2seq_mode=config['seq2seq_mode'],
+      sample_mean=config['sample_mean'],
+      bow_no_replace=config['bow_no_replace'],
+      grammar=config['grammar'],
+      mean_kl=config['mean_kl'],
+      single_graph=config['single_graph'])
 
 def get_singlestep_Seq2SeqModel(config, buckets):
   return tf_seq2seq.TFSeq2SeqEngine(
@@ -179,8 +206,9 @@ def get_singlestep_Seq2SeqModel(config, buckets):
       variable_prefix=config['variable_prefix'],
       init_const=config['bow_init_const'], use_bow_mask=config['use_bow_mask'],
       initializer=get_initializer(config),
-      legacy=config['legacy'])
-
+      legacy=config['legacy'],
+      seq2seq_mode=config['seq2seq_mode'])
+  
 def rename_variable_prefix(config):
   logging.info("Rename model variables with prefix %s" % config['variable_prefix'])
   with tf.Session() as session:

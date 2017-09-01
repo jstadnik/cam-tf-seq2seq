@@ -14,7 +14,7 @@ import time, datetime
 import logging, pickle
 
 import tensorflow as tf
-from translate.utils import data_utils, train_utils, model_utils
+from cam_tf_new.utils import data_utils, train_utils, model_utils
 
 tf.app.flags.DEFINE_string("config_file", None, "Pass options in a config file (will override conflicting command line settings)")
 
@@ -33,6 +33,7 @@ tf.app.flags.DEFINE_string("dev_src_idx", None, "Source side of development data
 tf.app.flags.DEFINE_string("dev_trg", None, "Target side of development data")
 tf.app.flags.DEFINE_string("dev_trg_idx", None, "Target side of development data (integer-mapped)")
 tf.app.flags.DEFINE_integer("max_sequence_length", 50, "Maximum length of source/target training sentences")
+tf.app.flags.DEFINE_integer("max_target_length", 0, "Maximum length of target training sentences: if 0, default to same as max_sequence_length")
 tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
 tf.app.flags.DEFINE_integer("max_train_batches", 0, "Limit on the number of training batches.")
 tf.app.flags.DEFINE_integer("max_train_epochs", 0, "Limit on the number of training epochs.")
@@ -60,6 +61,7 @@ tf.app.flags.DEFINE_integer("eval_size", 80, "The number of examples to evaluate
 tf.app.flags.DEFINE_boolean("eval_bleu", False, "If True, decode dev set and measure BLEU instead of measuring perplexities")
 tf.app.flags.DEFINE_integer("eval_bleu_size", 0, "The number of dev sentences to translate (all if set to 0)")
 tf.app.flags.DEFINE_integer("eval_bleu_start", 10000, "Number of batches before starting BLEU evaluation on dev")
+tf.app.flags.DEFINE_string("eval_cmd", "multi-bleu.perl REF -lc", "Path to BLEU eval script with space-delimited args. REF to be replaced by ref idx if needed. OUT to be replaced by out idx. If OUT is omitted, out idx is fed into stdin for the eval script")
 
 # Model configuration
 tf.app.flags.DEFINE_integer("src_vocab_size", 40000, "Source vocabulary size.")
@@ -74,7 +76,7 @@ tf.app.flags.DEFINE_boolean("use_seqlen", True, "Use sequence length for encoder
 tf.app.flags.DEFINE_boolean("use_src_mask", True, "Use source mask over for decoder attentions.")
 tf.app.flags.DEFINE_boolean("maxout_layer", False, "If > 0, use a maxout layer of given size and full softmax instead of sampled softmax")
 tf.app.flags.DEFINE_string("encoder", "reverse", "Select encoder from 'reverse', 'bidirectional', 'bow'. The 'reverse' encoder is unidirectional and reverses the input "
-                            "(default for tensorflow), the bidirectional encoder creates both forward and backward states and "
+          "(default for tensorflow), the bidirectional encoder creates both forward and backward states and "
                             "concatenates them (like the Bahdanau model)")
 tf.app.flags.DEFINE_boolean("init_backward", False, "When using the bidirectional encoder, initialise the hidden decoder state from the backward encoder state (default: forward).")                            
 tf.app.flags.DEFINE_boolean("legacy", False, "Read legacy models with slightly different variable scopes")
@@ -83,6 +85,21 @@ tf.app.flags.DEFINE_boolean("legacy", False, "Read legacy models with slightly d
 tf.app.flags.DEFINE_boolean("bow_init_const", False, "Learn an initialisation matrix for the decoder instead of taking the average of source embeddings")
 tf.app.flags.DEFINE_boolean("use_bow_mask", False, "Normalize decoder output layer over per-sentence BOW vocabulary")
 
+# Extra model configuration for VAE model
+tf.app.flags.DEFINE_integer("latent_size", 20, "Size of VAE latent state.")
+tf.app.flags.DEFINE_boolean("annealing", False, "Use KL cost annealing for VAE training")
+tf.app.flags.DEFINE_boolean("concat_encoded", False, "Concatenate the encoded input sentence to the decoder input")
+tf.app.flags.DEFINE_boolean("sample_mean", False, "Sample from mean of parameterised distribution without applying noise")
+tf.app.flags.DEFINE_boolean("scheduled_sample", True, "Use scheduled sampling, as in https://arxiv.org/abs/1506.03099")
+tf.app.flags.DEFINE_boolean("bow_no_replace", False, "If use_bow_mask, sample from the bag without replacement. Has no effect otherwise.")
+tf.app.flags.DEFINE_boolean("mean_kl", False, "KL loss is mean of terms over latent space dimensions, instead of sum (downweights loss term)")
+tf.app.flags.DEFINE_integer("scheduled_sample_steps", 1000, "Steps over which to linearly anneal the probability of decoding given the ground truth from 1.0 to 0.0")
+tf.app.flags.DEFINE_integer("kl_annealing_steps", 1000, "Steps over which to linearly anneal the KL loss from 0 to 1")
+tf.app.flags.DEFINE_float("word_keep_prob", 1.0, "Probability of not replacing decoder input word with UNK during training")
+tf.app.flags.DEFINE_float("kl_min", 0.0, "If >0, use minimum information criterion on KL loss as in https://arxiv.org/abs/1606.04934")
+tf.app.flags.DEFINE_string("grammar_def", None, "File defining int-mapped grammar")
+tf.app.flags.DEFINE_boolean("use_trg_grammar_mask", True, "use per-step grammar mask determined by prev output on the target, not source rule sequence")
+
 # Optimization settings
 tf.app.flags.DEFINE_string("opt_algorithm", "sgd", "Optimization algorithm: sgd, adagrad, adadelta")
 tf.app.flags.DEFINE_float("learning_rate", 1.0, "Learning rate.")
@@ -90,6 +107,11 @@ tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99, "Learning rate dec
 tf.app.flags.DEFINE_boolean("adjust_lr", False, "Adjust learning rate independent of performance.")
 tf.app.flags.DEFINE_float("max_gradient_norm", 1.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_integer("batch_size", 80, "Batch size to use during training.")
+tf.app.flags.DEFINE_boolean("single_graph", False, "Use bucketing to select batches but a single graph to run the model.")
+
+# Mode
+tf.app.flags.DEFINE_string("seq2seq_mode", "nmt", "Mode to run seq2seq model: nmt, autoencoder, vae. nmt: Bahdanau system with attention. autoencoder: simple seq2seq encoder-decoder model. vae: recurrent variational autoencoder")
+
 
 # Rename model variables
 tf.app.flags.DEFINE_bool("rename_variable_prefix", False, "Rename model variables with variable_prefix (assuming the model was saved with default prefix)")
@@ -121,6 +143,7 @@ def train(config):
     # Create model
     if config['fixed_random_seed']:
       tf.set_random_seed(1234)
+      np.random.seed(1234)
     model = model_utils.create_model(session, config, forward_only=False)
 
     if config['save_npz']:
@@ -154,7 +177,7 @@ def train(config):
     current_step = model.global_step.eval()
     previous_losses = [] # used for updating learning rate (train loss)
     current_eval_ppxs = [] # used for model saving
-    current_bleu = 0 # used for model saving
+    current_bleus = {'overall': 0.0, 'bp': 0.0} # used for model saving
     current_batch_idx = None
     while True:
       current_batch_idx = model.global_step.eval() % num_train_batches
@@ -201,13 +224,13 @@ def train(config):
 
       # Make a step on a random sequential batch (processing one batch is a global step)
       start_time = time.time()
-      encoder_inputs, decoder_inputs, target_weights, sequence_length, src_mask, bow_mask = model.get_batch(
+      encoder_inputs, decoder_inputs, target_weights, sequence_length, src_mask, trg_mask = model.get_batch(
         train_set, bucket_id, config['encoder'], batch_ptr=batch_ptr if config['train_sequential'] else None,
         bookk=bookk if config['debug'] else None)
 
       _, step_loss, _ = model.step(session, encoder_inputs, decoder_inputs,
                                    target_weights, bucket_id, False,
-                                   sequence_length, src_mask, bow_mask)
+                                   sequence_length, src_mask, trg_mask)
 
       step_time += (time.time() - start_time) / config['steps_per_checkpoint']
       loss += step_loss / config['steps_per_checkpoint']
@@ -234,12 +257,11 @@ def train(config):
 
         # Zero timer and loss.
         step_time, loss = 0.0, 0.0
-
         # Run evals on development set and print their perplexity.
         if current_step % (config['steps_per_checkpoint'] * config['eval_frequency']) == 0:
           if config['eval_bleu']:
             if model.global_step.eval() >= config['eval_bleu_start']:
-              current_bleu = train_utils.decode_dev(config, model, current_bleu)
+              train_utils.decode_dev(config, model, current_bleus)
             else:
               logging.info("Waiting until global step %i for BLEU evaluation on dev" % config['eval_bleu_start'])
           else:

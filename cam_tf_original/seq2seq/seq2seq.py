@@ -77,7 +77,7 @@ from tensorflow.python.util import nest
 # TODO(ebrevdo): Remove once _linear is fully deprecated.
 linear = rnn_cell._linear  # pylint: disable=protected-access
 
-from translate.seq2seq.wrapper_cells import BOWCell
+from cam_tf_original.seq2seq.wrapper_cells import BOWCell
 
 from tensorflow.python.ops.math_ops import tanh
 
@@ -636,7 +636,7 @@ def attention_decoder(decoder_inputs,
           s = s * src_mask
         a = nn_ops.softmax(s)
 
-        from tensorflow.models.rnn.translate.seq2seq.wrapper_cells import BOWCell
+        from cam_tf_original.seq2seq.wrapper_cells import BOWCell
         if isinstance(cell, BOWCell) and \
           (is_LSTM_cell(cell.get_cell()) or \
            is_LSTM_cell_with_dropout(cell.get_cell()) or \

@@ -25,9 +25,9 @@ import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
 
-from translate.utils import data_utils
-from translate.seq2seq.wrapper_cells import BidirectionalRNNCell, BOWCell
-from translate.seq2seq.seq2seq import embedding_attention_seq2seq, model_with_buckets
+from cam_tf_original.utils import data_utils
+from cam_tf_original.seq2seq.wrapper_cells import BidirectionalRNNCell, BOWCell
+from cam_tf_original.seq2seq.seq2seq import embedding_attention_seq2seq, model_with_buckets
 import logging
 from tensorflow.core.protobuf import saver_pb2
 

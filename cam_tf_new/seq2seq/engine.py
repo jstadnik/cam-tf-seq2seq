@@ -8,7 +8,7 @@ import tensorflow as tf
 
 import random
 import numpy as np
-from translate.utils import data_utils
+from cam_tf_new.utils import data_utils
 
 class TFGraph(object):
     '''

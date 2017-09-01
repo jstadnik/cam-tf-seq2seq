@@ -7,10 +7,10 @@ unnecessary assignments. I left them there to maintain the comparability to thei
 counterparts in tensorflow.models.rnn.seq2seq.
 '''
 
-from translate.seq2seq.engine import Engine, TrainGraph, EncodingGraph,\
+from cam_tf_original.seq2seq.engine import Engine, TrainGraph, EncodingGraph,\
     SingleStepDecodingGraph
-from translate.seq2seq.seq2seq_model import Seq2SeqModel
-from translate.seq2seq.wrapper_cells import BidirectionalRNNCell, BOWCell
+from cam_tf_original.seq2seq.seq2seq_model import Seq2SeqModel
+from cam_tf_original.seq2seq.wrapper_cells import BidirectionalRNNCell, BOWCell
 
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops

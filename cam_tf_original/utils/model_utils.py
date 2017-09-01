@@ -1,6 +1,6 @@
 from __future__ import print_function
 import data_utils
-from translate.seq2seq import seq2seq_model, tf_seq2seq
+from cam_tf_original.seq2seq import seq2seq_model, tf_seq2seq
 from tensorflow.python.platform import gfile
 import tensorflow as tf
 import os,re
