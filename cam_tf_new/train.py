@@ -302,11 +302,11 @@ def self_test():
     print ("Done.")
 
 def main(_):
-  if train_flags.self_test:
+  if FLAGS.self_test:
     self_test()
   else:
-    config = model_utils.process_args(train_flags,
-                                      train=False if train_flags.rename_variable_prefix else True)
+    config = model_utils.process_args(FLAGS,
+                                      train=False if FLAGS.rename_variable_prefix else True)
     if config['rename_variable_prefix']:
       model_utils.rename_variable_prefix(config)
     else:
