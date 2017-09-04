@@ -1,5 +1,5 @@
 from __future__ import print_function
-import data_utils
+from cam_tf_new.utils import data_utils
 from cam_tf_new.seq2seq import seq2seq_model, tf_seq2seq
 from tensorflow.python.platform import gfile
 import tensorflow as tf
@@ -66,8 +66,9 @@ def process_args(FLAGS, train=True, greedy_decoder=False):
     logging.info("UNK_ID=%d" % data_utils.UNK_ID)
     logging.info("PAD_ID=%d" % data_utils.PAD_ID)
   
-  config['grammar'] = data_utils.prepare_grammar(
-    config['grammar_def'], config['use_trg_grammar_mask'])
+  config['grammar'] = data_utils.prepare_grammar(config['grammar_def'],
+                                                 config['use_trg_grammar_mask'],
+                                                 config['rule_grammar'])
   return config
 
 

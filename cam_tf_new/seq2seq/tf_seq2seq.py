@@ -22,8 +22,6 @@ from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import embedding_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import nn_ops
-from tensorflow.python.ops import rnn
-from tensorflow.python.ops import rnn_cell
 from tensorflow.python.ops import variable_scope
 from tensorflow.python.util import nest
 
@@ -369,14 +367,14 @@ class TFSeq2SeqEncodingGraph(EncodingGraph):
                                  encoder_inputs, dtype=dtype, 
                                  sequence_length=sequence_length,
                                  bucket_length=bucket_length)
-              logging.debug("Bidirectional state size=%d" % cell.state_size) # this shows double the size for lstms
+              logging.debug("Bidirectional state size={}".format(cell.state_size)) # this shows double the size for lstms
             elif encoder == "reverse": 
               encoder_cell = rnn_cell.EmbeddingWrapper(
                 cell, embedding_classes=num_encoder_symbols,
                 embedding_size=embedding_size)
               encoder_outputs, encoder_state = rnn.rnn(
                 encoder_cell, encoder_inputs, dtype=dtype, sequence_length=sequence_length, bucket_length=bucket_length, reverse=True)
-              logging.debug("Unidirectional state size=%d" % cell.state_size)
+              logging.debug("Unidirectional state size={}".format(cell.state_size))
             elif encoder == "bow":
               encoder_outputs, encoder_state = cell.embed(rnn_cell.Embedder, num_encoder_symbols,
                                                   bow_emb_size, encoder_inputs, dtype=dtype)               
@@ -541,8 +539,8 @@ class TFSeq2SeqSingleStepDecodingGraph(SingleStepDecodingGraph):
             self.dec_state = tf.placeholder(dtypes.float32, shape=[None, cell.fw_state_size], name="dec_state")
         elif encoder == "reverse" or encoder == "bow":
           if cell._state_is_tuple:
-            dec_state_c = tf.placeholder(dtypes.float32, shape=[None, cell.state_size/2], name="dec_state_c")
-            dec_state_h = tf.placeholder(dtypes.float32, shape=[None, cell.state_size/2], name="dec_state_h")
+            dec_state_c = tf.placeholder(dtypes.float32, shape=[None, cell.state_size[0]], name="dec_state_c")
+            dec_state_h = tf.placeholder(dtypes.float32, shape=[None, cell.state_size[1]], name="dec_state_h")
             self.dec_state = rnn_cell.LSTMStateTuple(dec_state_c, dec_state_h)
           else:
             self.dec_state = tf.placeholder(dtypes.float32, shape=[None, cell.state_size], name="dec_state")

@@ -370,15 +370,34 @@ class Grammar(object):
 
   def add_mask_seq(self, grammar_mask, true_inputs, batch_idx):
     for idx, inp in enumerate(true_inputs):
-      #if inp == GO_ID:
-      #  lhs = self.rhs[inp][-1]
-      #else:
       if idx > 0:
         lhs = self.rule_id_to_lhs[inp]
         grammar_mask[idx - 1][batch_idx] = self.mask[lhs]
 
+class TokenGrammar(object):
+  def __init__(self, rules, use_trg_mask):
+    '''n_rules: number of rules (equivalent to vocab size)                      
+      n_nt: number of unique non-terminals                                      
+      mask: binary numpy array. mask(i,j) = 1 if non-terminal i on LHS of rule j
+      start: start rule RHS                               
+      rhs: padded numpy array containing indices of NTs on RHS of each rule     
+    '''
+    self.use_trg_mask = use_trg_mask
+    self.rule_id_to_lhs = dict()
+    self.start = [int(r) for r in rules[GO_ID]] 
+    self.nop = EOS_ID
+    self.stack_nops = 1
+    self.batch_size = 1
+    
 
-def prepare_grammar(grammar_path, use_trg_mask):
+
+  def add_mask_seq(self, grammar_mask, true_inputs, batch_idx):
+    for idx, inp in enumerate(true_inputs):
+      if idx > 0:
+        lhs = self.rule_id_to_lhs[inp]
+        grammar_mask[idx - 1][batch_idx] = self.mask[lhs]
+
+def prepare_grammar(grammar_path, use_trg_mask, rule_grammar):
   grammar = None
   if grammar_path is not None and gfile.Exists(grammar_path):
     logging.info('Getting grammar from path {}'.format(grammar_path))
@@ -391,8 +410,11 @@ def prepare_grammar(grammar_path, use_trg_mask):
         nt = int(nt.strip())
         # NB: this relies on non-terminals having the first indices
         mask_dict[nt].append(idx)
-        rules.append(rule.strip().split())      
+        rules.append(rule.strip().split())
+    if rule_grammar: 
       grammar = Grammar(mask_dict, rules, use_trg_mask, max_nt=nt)
+    else:
+      grammar = TokenGrammar(rules, use_trg_mask)
   elif grammar_path is not None:
     raise ValueError("Grammar path not found: {}".format(grammar_path))
   return grammar

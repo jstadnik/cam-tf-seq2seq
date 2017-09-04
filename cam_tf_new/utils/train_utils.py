@@ -27,7 +27,6 @@ import subprocess
 import re
 
 import model_utils
-from cam_tf_new.decode import decode
 import tensorflow as tf
 
 
@@ -239,6 +238,7 @@ def decode_dev(config, model, current_bleus):
   ref = config['dev_trg_idx']
   g2 = tf.Graph() # use a separate graph to avoid variable collision when loading model for decoding
   with g2.as_default() as g:
+    from cam_tf_new.decode import decode
     decode(config, input=inp, output=out, max_sentences=config['eval_bleu_size'])
   bleu, bp = eval_set(out, ref, config['eval_cmd'])
   

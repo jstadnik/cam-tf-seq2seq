@@ -294,14 +294,14 @@ class TFSeq2SeqEncodingGraph(EncodingGraph):
                                  encoder_inputs, dtype=dtype, 
                                  sequence_length=sequence_length,
                                  bucket_length=bucket_length)
-              logging.debug("Bidirectional state size=%d" % cell.state_size) # this shows double the size for lstms
+              logging.debug("Bidirectional state size={}".format(cell.state_size)) # this shows double the size for lstms
             elif encoder == "reverse": 
               encoder_cell = rnn_cell.EmbeddingWrapper(
                 cell, embedding_classes=num_encoder_symbols,
                 embedding_size=embedding_size)
               encoder_outputs, encoder_state = rnn.rnn(
                 encoder_cell, encoder_inputs, dtype=dtype, sequence_length=sequence_length, bucket_length=bucket_length, reverse=True)
-              logging.debug("Unidirectional state size=%d" % cell.state_size)
+              logging.debug("Unidirectional state size={}".format(cell.state_size))
             elif encoder == "bow":
               encoder_outputs, encoder_state = cell.embed(rnn_cell.Embedder, num_encoder_symbols,
                                                   bow_emb_size, encoder_inputs, dtype=dtype)               

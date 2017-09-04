@@ -20,7 +20,6 @@ if __name__ == "__main__":
   from cam_tf_new.train import FLAGS as train_flags # get default model settings from train.py
 from cam_tf_new.utils import data_utils, model_utils
 
-
 # Decoder settings
 tf.app.flags.DEFINE_string("test_src_idx", "/tmp/in.txt", "An integer-encoded input file")
 tf.app.flags.DEFINE_string("test_out_idx", "/tmp/out.txt", "Output file for decoder output")
@@ -31,9 +30,9 @@ tf.app.flags.DEFINE_boolean("interactive", False, "Decode from command line")
 tf.app.flags.DEFINE_string("decode_interpolate_hidden", None, "Decode from hidden layers interpolating between true and generated hidden vectors")
 FLAGS = tf.app.flags.FLAGS
 
-def decode(config, input=None, output=None, max_sentences=0):
-  if input and output:
-    inp = input
+def decode(config, input_file=None, output=None, max_sentences=0):
+  if input_file and output:
+    inp = input_file
     out = output
   else:
     inp = config['test_src_idx']

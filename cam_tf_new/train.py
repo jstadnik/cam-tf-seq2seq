@@ -99,6 +99,7 @@ tf.app.flags.DEFINE_float("word_keep_prob", 1.0, "Probability of not replacing d
 tf.app.flags.DEFINE_float("kl_min", 0.0, "If >0, use minimum information criterion on KL loss as in https://arxiv.org/abs/1606.04934")
 tf.app.flags.DEFINE_string("grammar_def", None, "File defining int-mapped grammar")
 tf.app.flags.DEFINE_boolean("use_trg_grammar_mask", True, "use per-step grammar mask determined by prev output on the target, not source rule sequence")
+tf.app.flags.DEFINE_boolean("rule_grammar", True, "use grammar with rules, not tokens")
 
 # Optimization settings
 tf.app.flags.DEFINE_string("opt_algorithm", "sgd", "Optimization algorithm: sgd, adagrad, adadelta")
@@ -301,11 +302,11 @@ def self_test():
     print ("Done.")
 
 def main(_):
-  if FLAGS.self_test:
+  if train_flags.self_test:
     self_test()
   else:
-    config = model_utils.process_args(FLAGS, train=False if FLAGS.rename_variable_prefix \
-                                                         else True)
+    config = model_utils.process_args(train_flags,
+                                      train=False if train_flags.rename_variable_prefix else True)
     if config['rename_variable_prefix']:
       model_utils.rename_variable_prefix(config)
     else:
