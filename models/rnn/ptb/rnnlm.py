@@ -1,6 +1,6 @@
 import logging
 import tensorflow as tf
-from tensorflow.python.ops import rnn
+from cam_tf_new.rnn import rnn
 
 def log10(x):
   numerator = tf.log(x)

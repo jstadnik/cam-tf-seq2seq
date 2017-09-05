@@ -63,8 +63,8 @@ import pickle
 import copy
 import tensorflow as tf
 
-from tensorflow.models.rnn.ptb import reader
-from tensorflow.models.rnn.ptb.utils import model_utils, train_utils
+from models.rnn.ptb import reader
+from models.rnn.ptb.utils import model_utils, train_utils
 
 flags = tf.flags
 flags.DEFINE_string("model", None, "A type of model. Possible options are: small, medium, large.")

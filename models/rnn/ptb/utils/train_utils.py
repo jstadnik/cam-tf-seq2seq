@@ -5,7 +5,7 @@ import logging
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.models.rnn.ptb import reader
+from models.rnn.ptb import reader
 
 def run_epoch(session, m, data, eval_op, train_dir, steps_per_ckpt, train=False, 
               start_idx=0, start_state=None, tmpfile=None, m_valid=None, valid_data=None, epoch=None):

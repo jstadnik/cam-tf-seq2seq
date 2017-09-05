@@ -2,7 +2,7 @@ import re, os
 import logging
 import tensorflow as tf
 
-from tensorflow.models.rnn.ptb.rnnlm import RNNLMModel
+from models.rnn.ptb.rnnlm import RNNLMModel
 
 class SmallConfig(object):
   """Small config."""
