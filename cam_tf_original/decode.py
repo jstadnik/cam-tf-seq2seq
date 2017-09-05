@@ -26,9 +26,9 @@ tf.app.flags.DEFINE_integer("max_sentences", 0, "The maximum number of sentences
 tf.app.flags.DEFINE_boolean("interactive", False, "Decode from command line")
 FLAGS = tf.app.flags.FLAGS
 
-def decode(config, input=None, output=None, max_sentences=0):
-  if input and output:
-    inp = input
+def decode(config, input_file=None, output=None, max_sentences=0):
+  if input_file and output:
+    inp = input_file
     out = output
   else:
     inp = config['test_src_idx']
