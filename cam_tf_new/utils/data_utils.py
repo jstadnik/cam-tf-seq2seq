@@ -24,7 +24,7 @@ import os
 import re
 import numpy as np
 import tarfile
-
+from scipy import sparse
 from six.moves import urllib
 
 import tensorflow as tf
@@ -367,12 +367,13 @@ class Grammar(object):
     self.mask[:, UNK_ID] = internal_nts 
     self.mask[:, GO_ID] = 0 # nothing should map to GO
     self.mask[:, PAD_ID] = 0 # nothing should map to PAD
-
+    self.sparse_mask = sparse.csr_matrix(self.mask)
+    
   def add_mask_seq(self, grammar_mask, true_inputs, batch_idx):
     for idx, inp in enumerate(true_inputs):
       if idx > 0:
         lhs = self.rule_id_to_lhs[inp]
-        grammar_mask[idx - 1][batch_idx] = self.mask[lhs]
+        grammar_mask[idx - 1][batch_idx] = self.sparse_mask[lhs]
 
 class TokenGrammar(object):
   def __init__(self, rules, use_trg_mask, rule_count):

@@ -24,7 +24,7 @@ import random
 import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
-
+from scipy import sparse
 from cam_tf_new.utils import data_utils
 from cam_tf_new.seq2seq.wrapper_cells import BidirectionalRNNCell, BOWCell
 from cam_tf_new.rnn import rnn_cell
@@ -295,8 +295,8 @@ class Seq2SeqModel(object):
       self.targets.append(tf.placeholder(tf.int32, shape=[None],
                                          name="target{0}".format(i)))
       if self.grammar is not None:
-        self.grammar.grammar_mask.append(tf.placeholder(tf.float32, shape=[None, None],
-                                                name='grammar{0}'.format(i)))
+        self.grammar.grammar_mask.append(tf.sparse_placeholder(tf.float32, shape=[None, None],
+                                                               name='grammar{0}'.format(i)))
 
     if use_sequence_length is True:
       logging.info("Using sequence length for encoder")                          
@@ -442,7 +442,9 @@ class Seq2SeqModel(object):
           1.0, 
           self.global_step.eval() / self.scheduled_sample_steps)
       if self.grammar is not None:
-        input_feed[self.grammar.grammar_mask[l].name] = trg_mask[l]
+        mask = trg_mask[l]
+        input_feed[self.grammar.grammar_mask[l]] = tf.SparseTensorValue(
+          np.array([mask.row, mask.col]).T, mask.data, mask.shape)
 
       input_feed[self.target_weights[l].name] = target_weights[l]
       if l < decoder_size - 1:
@@ -600,7 +602,7 @@ class Seq2SeqModel(object):
     encoder_size, decoder_size = self.buckets[-1] if self.single_graph else self.buckets[bucket_id]
     grammar_mask = None
     if self.grammar is not None:
-      grammar_mask = [np.zeros((self.batch_size, self.grammar.n_rules)) for _ in xrange(decoder_size)]
+      grammar_mask = [sparse.lil_matrix((self.batch_size, self.grammar.n_rules)) for _ in xrange(decoder_size)]
 
     # Get random batch of src and trg inputs, pad / reverse if needed, add GO to trg
     enc_input_lengths = []
@@ -635,7 +637,7 @@ class Seq2SeqModel(object):
                                     batch_idx)
         else:
           self.grammar.add_mask_seq(grammar_mask, full_encoder_in, batch_idx)          
-
+      
     # Now we create batch-major vectors from the data selected above.
     batch_encoder_inputs, batch_decoder_inputs, batch_weights_trg = [], [], []
 
@@ -705,6 +707,8 @@ class Seq2SeqModel(object):
     if self.bow_mask is not None:
       trg_mask = bow_mask
     elif self.grammar is not None:
+      for idx, m in enumerate(grammar_mask):
+        grammar_mask[idx] = m.tocoo()
       trg_mask = grammar_mask
 
     return batch_encoder_inputs, batch_decoder_inputs, batch_weights_trg, sequence_length, src_mask, trg_mask
