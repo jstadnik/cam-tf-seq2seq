@@ -153,7 +153,7 @@ def apply_grammar(output, output_idx, stack, grammar, scope=None):
                     for seq_id in range(grammar.batch_size)]
       new_mask = tf.gather_nd(grammar.grammar_full_mask, current_nt)
     else:
-      new_mask = tf.sparse_tensor_to_dense(grammar.grammar_mask[output_idx])
+      new_mask = grammar.grammar_mask[output_idx]
     output = output * new_mask
 
     if stack is not None:
