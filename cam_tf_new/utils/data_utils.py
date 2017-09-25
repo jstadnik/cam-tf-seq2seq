@@ -323,16 +323,17 @@ def get_training_data(config):
     return src_train, trg_train, src_dev, trg_dev
 
 class Grammar(object):
-  def __init__(self, mask_dict, rules, use_trg_mask=False, max_nt=0):
+  def __init__(self, mask_dict, rules, use_trg_mask=False):
     '''n_rules: number of rules (equivalent to vocab size)                      
       n_nt: number of unique non-terminals                                      
       mask: binary numpy array. mask(i,j) = 1 if non-terminal i on LHS of rule j
       start: start rule RHS                               
       rhs: padded numpy array containing indices of NTs on RHS of each rule     
     '''
+    self.rule_based = True
     self.use_trg_mask = use_trg_mask
     self.n_rules = len(rules)
-    self.n_nt = max_nt + 1
+    self.n_nt = len(mask_dict)
     self.rule_id_to_lhs = dict()
     self.start = [int(r) for r in rules[GO_ID]] 
     self.nop = EOS_ID
@@ -349,11 +350,10 @@ class Grammar(object):
       self.mask[nt, rule_id_list] = 1
       for rule_id in rule_id_list:
         self.rule_id_to_lhs[rule_id] = nt
-
     internal_rules = np.zeros(self.n_rules)
     internal_nts = np.zeros(self.n_nt)
     max_nt_count = 0
-    for rule_idx, rule in enumerate(rules):
+    for rule_idx, rule in rules.items():
       self.rhs.append([int(r) for r in reversed(rule) if int(r) in mask_dict])
       max_nt_count = max(max_nt_count, len(rule))
       self.sampling_rhs.append([int(r) for r in rule if int(r) in mask_dict])
@@ -382,31 +382,51 @@ class TokenGrammar(object):
       start: start rule RHS                               
       rhs: padded numpy array containing indices of NTs on RHS of each rule     
     '''
+    self.rule_based = False
     self.use_trg_mask = use_trg_mask
-    self.rule_id_to_lhs = dict()
-    self.start = [int(r) for r in rules[GO_ID]] 
+    self.rule_id_to_rhs = {}
+    for nt in rules:
+      self.rule_id_to_rhs[nt] = [int(r) for r in rules[nt]]
+    self.start = [GO_ID] 
     self.nop = EOS_ID
     self.stack_nops = 1
     self.batch_size = 1
     self.n_rules = rule_count
     self.n_nt = len(rules) # NB does not count <eps> or <unk> as NTs
-    self.mask = np.zeros((self.n_nt + 2, self.n_rules))
-    self.not_last_nt = np.zeros((1, self.n_rules))
-    for nt in rules:
-      for tok in rules[nt]:
-        mask[nt, tok] = 1
+    self.mask = np.zeros((self.n_nt + 2, self.n_rules), dtype=np.float32)
+    self.not_last_nt = np.zeros(self.n_rules, dtype=bool)
+    self.is_nt = np.zeros(self.n_rules, dtype=bool)
 
-    
+    for nt, rhs in self.rule_id_to_rhs.items():
+      for tok in rhs:
+        self.mask[nt, tok] = 1
     for nt in rules:
+      self.is_nt[nt] = 1
       if self.mask[nt, 0] == 1:
         self.mask[nt, 0] = 0
-        self.not_last_nt[0, nt] = 1
-    
+        self.not_last_nt[nt] = 1
+
   def add_mask_seq(self, grammar_mask, true_inputs, batch_idx):
+    stack = collections.deque([GO_ID])
+    keep_current_mask = 0
+    mask = []
+    current_rhs = []
     for idx, inp in enumerate(true_inputs):
       if idx > 0:
-        lhs = self.rule_id_to_lhs[inp]
-        grammar_mask[idx - 1][batch_idx] = self.mask[lhs]
+        if not keep_current_mask:
+          if current_rhs:
+            stack.extend(reversed(current_rhs))
+            current_rhs = []
+          try:
+            last_nt = stack.pop()
+          except:
+            last_nt = EOS_ID
+          mask = self.mask[last_nt]
+        grammar_mask[idx - 1][batch_idx] = mask
+        keep_current_mask = self.not_last_nt[inp]
+        if self.is_nt[inp]:
+          current_rhs.append(inp)
+ 
 
 def prepare_grammar(grammar_path, use_trg_mask, rule_grammar, rule_count):
   grammar = None
@@ -414,16 +434,17 @@ def prepare_grammar(grammar_path, use_trg_mask, rule_grammar, rule_count):
     logging.info('Getting grammar from path {}'.format(grammar_path))
     grammar_eos()
     mask_dict = collections.defaultdict(list)
-    rules = []
+    rules = {}
     with open(grammar_path) as f:
       for idx, line in enumerate(f):
         nt, rule = line.split(':')
         nt = int(nt.strip())
         # NB: this relies on non-terminals having the first indices
         mask_dict[nt].append(idx)
-        rules.append(rule.strip().split())
+        label = idx if rule_grammar else nt
+        rules[label] = rule.strip().split()
     if rule_grammar: 
-      grammar = Grammar(mask_dict, rules, use_trg_mask, max_nt=nt)
+      grammar = Grammar(mask_dict, rules, use_trg_mask)
     else:
       grammar = TokenGrammar(rules, use_trg_mask, rule_count)
   elif grammar_path is not None:

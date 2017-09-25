@@ -280,10 +280,12 @@ class Seq2SeqModel(object):
     if self.grammar:
       self.grammar.grammar_mask = []
       if forward_only and grammar.use_trg_mask:
-        self.grammar.rhs_mask = tf.placeholder(
-          tf.int32, shape=[None, None], name='grammar_rhs')
         self.grammar.grammar_full_mask = tf.placeholder(
           tf.float32, shape=[None, None], name='grammar_mask')
+        if self.grammar.rule_based:
+          self.grammar.rhs_mask = tf.placeholder(
+            tf.int32, shape=[None, None], name='grammar_rhs')
+
     for i in xrange(buckets[-1][0]):  # Last bucket is the biggest one.
       self.encoder_inputs.append(tf.placeholder(tf.int32, shape=[None],
                                                 name="encoder{0}".format(i)))                                                      
@@ -430,9 +432,9 @@ class Seq2SeqModel(object):
     input_feed = {}
     use_grammar_stack = (self.grammar is not None and self.grammar.use_trg_mask and forward_only)
     if use_grammar_stack:
-        input_feed[self.grammar.rhs_mask.name] = self.grammar.sampling_rhs
         input_feed[self.grammar.grammar_full_mask.name] = self.grammar.mask
-
+        if self.grammar.rule_based:
+          input_feed[self.grammar.rhs_mask.name] = self.grammar.sampling_rhs
     for l in xrange(encoder_size):
       input_feed[self.encoder_inputs[l].name] = encoder_inputs[l]
     for l in xrange(decoder_size):

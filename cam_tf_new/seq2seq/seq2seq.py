@@ -125,13 +125,19 @@ def rnn_grammar_decoder(decoder_inputs, initial_state, cell, grammar, loop_funct
     outputs = []
     logging.info('Constraining decoder to grammar')
     stack = None
+    keep_mask = None
+    to_stack = None
+    current_mask = None
     if loop_function is not None and grammar.use_trg_mask:
       stack = [tf.concat(0, 
                   (grammar.start,
                    grammar.nop * tf.ones([grammar.stack_nops], dtype=tf.int32)))
                for _ in range(grammar.batch_size)]  
       logging.info('Initialising sampling-only stack')
-
+      if not grammar.rule_based:
+        to_stack = [tf.zeros(0, tf.int32) for _ in range(grammar.batch_size)]
+        keep_mask = [tf.constant(False, dtype=bool) for _ in range(grammar.batch_size)]
+        current_mask = [tf.zeros([1, grammar.n_rules]) for _ in range(grammar.batch_size)]
     for i, inp in enumerate(decoder_inputs):
       reuse = (i > 0)
       with variable_scope.variable_scope(scope or "rnn_decoder", reuse=reuse):
@@ -139,16 +145,21 @@ def rnn_grammar_decoder(decoder_inputs, initial_state, cell, grammar, loop_funct
           if prev is not None:
             inp = loop_function(prev, i)
         output, state = cell(inp, state)
-        output = apply_grammar(output, i, stack, loop_function, grammar,
-                               scope=variable_scope.get_variable_scope())
+        if grammar.rule_based:
+          output = apply_rule_grammar(output, i, stack, grammar,
+                                      scope=variable_scope.get_variable_scope())
+        else:
+          output = apply_tok_grammar(output, i, stack, keep_mask, current_mask, to_stack,
+                                     grammar, scope=variable_scope.get_variable_scope())
         outputs.append(output)
         prev = output
   return outputs, state
 
-def apply_grammar(output, output_idx, stack, grammar, scope=None):
+def apply_rule_grammar(output, output_idx, stack, grammar, scope=None):
+  # Rule-based grammar decoding
   reuse = (output_idx > 0)
   with variable_scope.variable_scope(scope or "grammar", reuse=reuse):
-    if stack is not None:
+    if stack is not None: 
       current_nt = [tf.slice(stack[seq_id], [0], [1]) 
                     for seq_id in range(grammar.batch_size)]
       new_mask = tf.gather_nd(grammar.grammar_full_mask, current_nt)
@@ -166,6 +177,44 @@ def apply_grammar(output, output_idx, stack, grammar, scope=None):
         stack[seq_id] = tf.concat(0, (trimmed_rhs[seq_id], 
                         tf.slice(stack[seq_id], [1], [-1])))
     return output
+
+
+def apply_tok_grammar(output, output_idx, stack, keep_mask, current_mask, to_stack, 
+                      grammar, scope=None):
+  # Token-based grammar decoding
+  reuse = (output_idx > 0)
+  with variable_scope.variable_scope(scope or "grammar", reuse=reuse):
+    if stack is None:
+      new_mask = grammar.grammar_mask[output_idx] 
+      output = output * new_mask
+    else:
+      list_out = tf.unstack(output, grammar.batch_size)
+      masked_out = []
+                        
+      for i in range(grammar.batch_size):
+        stack[i] = tf.cond(tf.squeeze(keep_mask[i]),
+                           lambda: tf.identity(stack[i]),
+                           lambda: tf.concat(0, (tf.reshape(to_stack[i], [-1]), stack[i])))
+        to_stack[i] = tf.cond(tf.squeeze(keep_mask[i]),
+                           lambda: tf.identity(to_stack[i]),
+                           lambda:  tf.zeros(0, tf.int32))
+        
+        current_mask[i] = tf.cond(tf.squeeze(keep_mask[i]),
+                                  lambda: tf.identity(current_mask[i]),
+                                  lambda: tf.gather(grammar.grammar_full_mask,
+                                                    tf.slice(stack[i], [0], [1])))
+        stack[i] = tf.cond(tf.squeeze(keep_mask[i]),
+                           lambda: tf.identity(stack[i]),
+                           lambda: tf.slice(stack[i], [1], [-1]))
+        masked_out.append(list_out[i] * current_mask[i])
+        chosen = tf.cast(tf.argmax(masked_out[-1], 1), tf.int32)
+        keep_mask[i] = tf.gather(grammar.not_last_nt, chosen)
+        is_nt = tf.gather(grammar.is_nt, chosen)
+        to_stack[i] = tf.cond(tf.squeeze(is_nt), 
+                              lambda: tf.concat(0, (tf.reshape(to_stack[i], [-1]), chosen)),
+                              lambda: tf.identity(to_stack))
+      output = tf.reshape(masked_out, [grammar.batch_size, grammar.n_rules])
+    return output 
 
 def rnn_decoder(decoder_inputs, initial_state, cell, loop_function=None,
                 scope=None, feed_prev_p=None, bow_mask=None,
@@ -1044,13 +1093,20 @@ def attention_decoder(decoder_inputs,
     if grammar is not None:
       logging.info('Constraining decoder to grammar')
       stack = None
+      keep_mask = None
+      current_mask = None
+      to_stack = None
       if loop_function is not None and grammar.use_trg_mask:
         stack = [tf.concat(0, 
                            (grammar.start,
                             grammar.nop * tf.ones([grammar.stack_nops], dtype=tf.int32)))
                  for _ in range(grammar.batch_size)]  
         logging.info('Initialising sampling-only stack')
-    
+        if not grammar.rule_based:
+          to_stack = [tf.zeros(0, tf.int32) for _ in range(grammar.batch_size)]
+          keep_mask = [tf.constant(False, dtype=bool) for _ in range(grammar.batch_size)]
+          current_mask = [[] for _ in range(grammar.batch_size)]
+
     for inp_idx, inp in enumerate(decoder_inputs):
       if inp_idx > 0:
         variable_scope.get_variable_scope().reuse_variables()
@@ -1110,9 +1166,12 @@ def attention_decoder(decoder_inputs,
         output = output * bow_mask
 
       if grammar is not None:
-        output = apply_grammar(output, inp_idx, stack, grammar,
-                               scope=variable_scope.get_variable_scope())
-
+        if grammar.rule_based:
+          output = apply_rule_grammar(output, inp_idx, stack, grammar,
+                                      scope=variable_scope.get_variable_scope())
+        else:
+          output = apply_tok_grammar(output, inp_idx, stack, keep_mask, current_mask, to_stack,
+                                     grammar, scope=variable_scope.get_variable_scope())
       if loop_function is not None:
         prev = output
       outputs.append(output)
