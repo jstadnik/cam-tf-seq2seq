@@ -29,7 +29,7 @@ from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import tensor_array_ops
 from tensorflow.python.ops import variable_scope as vs
 from tensorflow.python.util import nest
-from cam_tf_new.rnn import rnn_cell
+from cam_tf_original.rnn import rnn_cell
 
 # pylint: disable=protected-access
 _state_size_with_prefix = rnn_cell._state_size_with_prefix

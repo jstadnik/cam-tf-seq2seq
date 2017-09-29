@@ -246,7 +246,8 @@ def decode_dev(config, model, current_bleus):
   current_model = make_model_path(config, str(model.global_step.eval()))
   dev_bleu_model = make_model_path(config, "dev_bleu")
   dev_bp_bleu_model = make_model_path(config, "dev_bp_bleu")
-  logging.info(current_bleus)
+  logging.info('Best bleu with high BP: {}, with any BP: {}'.format(current_bleus['bp'],
+                                                                    current_bleus['overall']))
   if bleu > current_bleus['overall']:
     current_bleus['overall'] = bleu
     shutil.copy(current_model, dev_bleu_model)
@@ -266,11 +267,12 @@ def make_model_path(config, affix):
 def eval_set(out, ref, cmd): 
   def eval_args(out, ref, cmd):
     # add path to ref idx if needed
-    cmd_with_ref = ref.join(cmd.split('REF'))
-    if len(cmd_with_ref.split('OUT')) == 1:
-      args = dict(args=cmd_with_ref.split(), stdin=open(out))
+    if len(cmd.split('REF')) > 1:
+        cmd = ref.join(cmd.split('REF'))
+    if len(cmd.split('OUT')) == 1:
+      args = dict(args=cmd.split(), stdin=open(out))
     else:
-      args = dict(args=out.join(cmd_with_ref.split('OUT')).split())
+      args = dict(args=out.join(cmd.split('OUT')).split())
     return args
 
   try:
