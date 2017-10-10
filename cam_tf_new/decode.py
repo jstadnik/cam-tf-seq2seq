@@ -1,5 +1,4 @@
 """Binary for decoding from translation models based on tensorflow/models/rnn/translate/translate.py.
-
 Note that this decoder is greedy and very basic. For a better decoder, see http://ucam-smt.github.io/sgnmt/html/tutorial.html
 which supports decoding from tensorflow models.
 """
@@ -12,7 +11,6 @@ import sys
 import numpy as np
 import datetime
 import logging
-
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
 
@@ -39,13 +37,11 @@ def output_increment_sentence(outputs, f_out, num_sentences):
   return num_sentences + 1
 
 def get_model_buckets(config, input_file):
-  # Get correct buckets for decoding graph
   max_input_length = 0
+  eos_token_len = 1 if config['add_src_eos'] else 0
   with open(input_file) as f_in:
     for sentence in f_in:
-      sentence_len = len(sentence.strip().split())
-      if config['add_src_eos']:
-        sentence_len += 1
+      sentence_len = len(sentence.strip().split()) + eos_token_len
       max_input_length = max(sentence_len, max_input_length)
   buckets = list(model_utils._buckets)
   logging.info("Decoder buckets: {}".format(buckets))
@@ -89,7 +85,7 @@ def decode(config, input_file=None, output=None, max_sentences=0):
   else:
     with tf.Session() as session:
       # Create model and load parameters: uses the training graph for decoding
-      buckets = get_model_buckets(config, input_file)
+      buckets = get_model_buckets(config, inp)
       model = get_inference_model(config, session, buckets=buckets)
       num_sentences = 0
       logging.info("Start decoding, max_sentences=%i" % max_sents)
@@ -156,10 +152,9 @@ def log_msg(f_name, msg):
     f_out.write(msg)
 
 def decode_hidden(session, model, config, out, hidden_list, append=False):
+  mode = 'w'
   if append:
-    mode = 'a'
-  else:
-    mode = 'w'
+    mode = 'a'   
   resize_dim = get_resize_dim(config)
   with open(config['test_out_idx'], mode) as f_out:
     for hidden in hidden_list:
@@ -170,7 +165,6 @@ def decode_hidden(session, model, config, out, hidden_list, append=False):
 def decode_interactive(config):
   with tf.Session() as session:
     model = get_inference_model(config, session)
-    # Decode from standard input.
     sys.stdout.write("> ")
     sys.stdout.flush()
     sentence = sys.stdin.readline()
@@ -181,42 +175,35 @@ def decode_interactive(config):
       sys.stdout.flush()
       sentence = sys.stdin.readline()
 
-def get_outputs(session, config, model, sentence, buckets=None, hidden=None):
-  # Get token-ids for the input sentence.
-  token_ids = [ int(tok) for tok in sentence.strip().split() ]
-  token_ids = [ w if w < config['src_vocab_size'] else data_utils.UNK_ID
-                for w in token_ids ]
-  if config['add_src_eos']:
-    token_ids.append(data_utils.EOS_ID)
-
+def get_output_bucket_id(token_ids, buckets=None, hidden=None):
   if not buckets:
     buckets = model_utils._buckets
   if hidden is None:
-    bucket_id = min([b for b in xrange(len(buckets))
-                     if buckets[b][0] >= len(token_ids)])
+    bucket_id = min([b for b in xrange(len(buckets)) if buckets[b][0] >= len(token_ids)])
   else:
     bucket_id = max([b for b in xrange(len(buckets))])
   logging.info("Bucket {}".format(buckets[bucket_id]))
   logging.info("Input: {}".format(token_ids))
+  return bucket_id
 
-  # Get a 1-element batch to feed the sentence to the model.
-  encoder_inputs, decoder_inputs, target_weights, sequence_length, src_mask, trg_mask = model.get_batch(
+def get_outputs(session, config, model, sentence, buckets=None, hidden=None):
+  token_ids = [int(tok) for tok in sentence.strip().split()]
+  token_ids = [w if w < config['src_vocab_size'] else data_utils.UNK_ID for w in token_ids]
+  if config['add_src_eos']:
+    token_ids.append(data_utils.EOS_ID)
+  bucket_id = get_output_bucket_id(token_ids, buckets=buckets, hidden=hidden)
+  enc_inputs, dec_inputs, trg_weights, seq_length, src_mask, trg_mask = model.get_batch(
     {bucket_id: [(token_ids, [])]}, bucket_id, config['encoder'])
-  # Get output logits for the sentence.
-  _, _, output_logits, hidden_states = model.get_state_step(session, encoder_inputs, 
-                                                            decoder_inputs,
-                                                            target_weights, bucket_id, 
-                                                            forward_only=True,
-                                                            sequence_length=sequence_length,
-                                                            src_mask=src_mask, trg_mask=trg_mask,
-                                                            hidden=hidden)
-
+  _, _, logits, states = model.get_state_step(session, enc_inputs, dec_inputs,
+                                              trg_weights, bucket_id, forward_only=True,
+                                              sequence_length=seq_length, src_mask=src_mask,
+                                              trg_mask=trg_mask, hidden=hidden)
   outputs = []
-  for logit in output_logits:
+  for logit in logits:
     outputs.append(int(np.argmax(logit, axis=1)))
     if outputs[-1] == data_utils.EOS_ID:
       break
-  return outputs, hidden_states
+  return outputs, states
 
 def main(_):
   config = model_utils.process_args(FLAGS, train=False, greedy_decoder=True)
@@ -233,4 +220,3 @@ if __name__ == "__main__":
   logging.info("Start: {}".format(current_time_str()))
   tf.app.run()
   logging.info("End: {}".format(current_time_str()))
-
