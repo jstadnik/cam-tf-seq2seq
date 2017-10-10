@@ -80,33 +80,31 @@ def decode(config, input_file=None, output=None, max_sentences=0):
       # Decode input file
       num_sentences = 0
       logging.info("Start decoding, max_sentences=%i" % max_sents)
-      if hidden:
-        with open(inp) as f_in, open(out, 'w') as f_out, open(hidden, 'wb') as f_hidden:
-          pickler = cPickle.Pickler(f_hidden)
-          for sentence in f_in:
-            outputs, states = get_outputs(session, config, model, sentence, buckets)
-            logging.info("Output: {}".format(outputs))
-            # If there is an EOS symbol in outputs, cut them at that point.
-            if data_utils.EOS_ID in outputs:
-              outputs = outputs[:outputs.index(data_utils.EOS_ID)]
-            print(" ".join([str(tok) for tok in outputs]), file=f_out)
-            pickler.dump({'states': states, 'length': len(outputs)})
-            num_sentences += 1
-            if max_sents > 0 and num_sentences >= max_sents:
-              break
-      else:
-        with open(inp) as f_in, open(out, 'w') as f_out:
+      with open(inp) as f_in, open(out, 'w') as f_out:
+        if hidden:
+          with open(hidden, 'wb') as f_hidden:
+            pickler = cPickle.Pickler(f_hidden)
+            for sentence in f_in:
+              outputs, states = get_outputs(session, config, model, sentence, buckets)
+              num_sentences = output_increment_sentence(outputs, f_out, num_sentences)
+              pickler.dump({'states': states, 'length': len(outputs)})
+              if max_sents > 0 and num_sentences >= max_sents:
+                break
+        else:
           for sentence in f_in:
             outputs, _ = get_outputs(session, config, model, sentence, buckets)
-            logging.info("Output: {}".format(outputs))
-            # If there is an EOS symbol in outputs, cut them at that point.
-            if data_utils.EOS_ID in outputs:
-              outputs = outputs[:outputs.index(data_utils.EOS_ID)]
-            print(" ".join([str(tok) for tok in outputs]), file=f_out)
-            num_sentences += 1
+            num_sentences = output_increment_sentence(outputs, f_out, num_sentences)
             if max_sents > 0 and num_sentences >= max_sents:
               break
   logging.info("Decoding completed.")
+
+def output_increment_sentence(outputs, f_out, num_sentences):
+  logging.info("Output: {}".format(outputs))
+  # If there is an EOS symbol in outputs, cut them at that point.
+  if data_utils.EOS_ID in outputs:
+    outputs = outputs[:outputs.index(data_utils.EOS_ID)]
+  print(" ".join([str(tok) for tok in outputs]), file=f_out)
+  return num_sentences + 1
 
 def unpickle_hidden(config, out, max_sentences=0):
   hidden_list = []
@@ -165,13 +163,8 @@ def decode_hidden(session, model, config, out, hidden_list, append=False):
     mode = 'w'
   with open(config['test_out_idx'], mode) as f_out:
     for hidden in hidden_list:
-      #hidden = np.random.randn(1, 1000)
       outputs, states = get_outputs(session, config, model, sentence='', hidden=hidden)
-      logging.info("Output: {}".format(outputs))
-      if data_utils.EOS_ID in outputs:
-        outputs = outputs[:outputs.index(data_utils.EOS_ID)]
-      print(" ".join([str(tok) for tok in outputs]), file=f_out)
-
+      output_increment_sentence(outputs, f_out, num_sentences=0)
 
 def decode_interactive(config):
   with tf.Session() as session:
