@@ -36,13 +36,17 @@ def output_increment_sentence(outputs, f_out, num_sentences):
   print(" ".join([str(tok) for tok in outputs]), file=f_out)
   return num_sentences + 1
 
-def get_model_buckets(config, input_file):
+def get_max_inp_len(input_file, add_src_eos):
   max_input_length = 0
-  eos_token_len = 1 if config['add_src_eos'] else 0
+  eos_token_len = 1 if add_src_eos else 0
   with open(input_file) as f_in:
     for sentence in f_in:
       sentence_len = len(sentence.strip().split()) + eos_token_len
       max_input_length = max(sentence_len, max_input_length)
+  return max_input_length
+
+def get_model_buckets(config, input_file):
+  max_input_length = get_max_inp_len(input_file, config['add_src_eos'])
   buckets = list(model_utils._buckets)
   logging.info("Decoder buckets: {}".format(buckets))
   max_bucket = buckets[len(buckets) - 1][0]
@@ -58,9 +62,110 @@ def get_model_buckets(config, input_file):
   return buckets
 
 def get_inference_model(config, session, buckets=None, hidden=False):
-  config['batch_size'] = 1 # We decode one sentence at a time during inference
   model = model_utils.create_model(session, config, forward_only=True, buckets=buckets, hidden=hidden)
+  model.batch_size = 1
   return model
+
+
+class TokParsePredictor(object):
+  def __init__(self, grammar_path, word_out=False):
+    logging.info('Initialising decoder grammar')
+    self.grammar_path = grammar_path
+    self.word_out = word_out
+    self.stack = [data_utils.EOS_ID, data_utils.GO_ID]
+    self.current_lhs = None
+    self.current_rhs = []
+    self.keep_lhs = False
+    self.prepare_grammar()
+
+  def prepare_grammar(self):
+    self.lhs_to_can_follow = {}
+    with open(self.grammar_path) as f:
+      for line in f:
+        nt, rule = line.split(':')
+        nt = int(nt.strip())
+        self.lhs_to_can_follow[nt] = set([int(r) for r in rule.strip().split()])
+      self.last_nt_in_rule = {nt: True for nt in self.lhs_to_can_follow}
+      for nt, following in self.lhs_to_can_follow.items():
+        if 0 in following:
+          following.remove(0)
+          self.last_nt_in_rule[nt] = False
+                    
+  def is_nt(self, word):
+    if word in self.lhs_to_can_follow:
+      return True
+    return False
+
+  def reset(self):
+    self.stack = [data_utils.EOS_ID, data_utils.GO_ID]
+    self.current_lhs = None
+    self.keep_lhs = False
+    self.current_rhs = []
+
+  def predict_next(self, nmt_posterior, predicting_next_word=False):
+    if not self.keep_lhs:
+      self.stack.extend(reversed(self.current_rhs))
+      self.current_lhs = self.stack.pop()
+      self.current_rhs = []
+    outgoing_rules = self.lhs_to_can_follow[self.current_lhs]
+    for rule_id in range(len(nmt_posterior[0])):
+      if rule_id not in outgoing_rules:
+        nmt_posterior[0][rule_id] = -np.inf
+      
+  def consume(self, word):
+    if self.is_nt(word):
+      self.current_rhs.append(word)
+      self.keep_lhs = not self.last_nt_in_rule[word]
+    else:
+      self.keep_lhs = False
+
+def single_step_decoding(config, input_file, output_file, max_sents=0):
+  logging.info('Single-step decoding for grammar')
+  max_seq_len = get_max_inp_len(input_file, config['add_src_eos'])
+  num_heads = 1
+  num_sentences = 0
+  grammar = None
+  if config['grammar_def']:
+    grammar = TokParsePredictor(config['grammar_def'])
+  with tf.Session() as session:
+    model, train_graph, enc_graph, single_step_dec_graph, buckets = model_utils.load_model(session, config, max_seq_len=max_seq_len)
+    model.batch_size = 1
+    with open(input_file) as f_in, open(output_file, 'w') as f_out:
+      for sentence in f_in:
+        dec_in = [data_utils.GO_ID]
+        dec_state = {}
+        word_count = 0
+        token_ids = get_token_ids(sentence, config)
+        bucket_id = get_src_bucket_id(token_ids, buckets=buckets)
+        enc_in, _, _, seq_len, src_mask, _ = train_graph.get_batch(
+          {bucket_id: [(token_ids, [])]}, bucket_id, config['encoder'])
+        dec_state['dec_state'], enc_out = enc_graph.encode(session, enc_in, bucket_id, seq_len)
+        for a in xrange(num_heads):
+          dec_state["dec_attns_%d" % a] = np.zeros((1, enc_out['enc_v_0'].size), dtype=np.float32)
+        if config['use_src_mask']:
+          dec_state["src_mask"] = src_mask
+        output_tokens = []
+        while True:
+          logit, dec_state = single_step_dec_graph.decode(session, enc_out, dec_state,
+                                                          dec_in, bucket_id, config['use_src_mask'],
+                                                          word_count, config['use_bow_mask'])
+          if grammar:
+            grammar.predict_next(logit)
+          word_count += 1
+          output_tokens.append(int(np.argmax(logit, axis=1)))
+          dec_in = [output_tokens[-1]]
+          if grammar:
+            grammar.consume(dec_in[0])
+          if dec_in[0] == data_utils.EOS_ID:
+            break
+          if word_count > int(config['max_len_factor'] * len(token_ids)):
+            logging.info('Incomplete hypothesis')
+            break
+        if grammar:
+          grammar.reset()
+        num_sentences = output_increment_sentence(output_tokens, f_out, num_sentences)
+        if max_sents > 0 and num_sentences >= max_sents:
+          break
 
 def decode(config, input_file=None, output=None, max_sentences=0):
   if input_file and output:
@@ -82,6 +187,8 @@ def decode(config, input_file=None, output=None, max_sentences=0):
     unpickle_hidden(config, out, max_sentences=max_sents)
   elif 'decode_interpolate_hidden' in config and config['decode_interpolate_hidden']:
     decode_interpolate_hidden(config, out, max_sentences=max_sents)
+  elif config['max_len_factor'] > 0 and config['grammar_def']: # single step decoding
+    single_step_decoding(config, inp, out, max_sents)
   else:
     with tf.Session() as session:
       # Create model and load parameters: uses the training graph for decoding
@@ -175,7 +282,7 @@ def decode_interactive(config):
       sys.stdout.flush()
       sentence = sys.stdin.readline()
 
-def get_output_bucket_id(token_ids, buckets=None, hidden=None):
+def get_src_bucket_id(token_ids, buckets=None, hidden=None):
   if not buckets:
     buckets = model_utils._buckets
   if hidden is None:
@@ -186,12 +293,16 @@ def get_output_bucket_id(token_ids, buckets=None, hidden=None):
   logging.info("Input: {}".format(token_ids))
   return bucket_id
 
-def get_outputs(session, config, model, sentence, buckets=None, hidden=None):
+def get_token_ids(sentence, config):
   token_ids = [int(tok) for tok in sentence.strip().split()]
   token_ids = [w if w < config['src_vocab_size'] else data_utils.UNK_ID for w in token_ids]
   if config['add_src_eos']:
     token_ids.append(data_utils.EOS_ID)
-  bucket_id = get_output_bucket_id(token_ids, buckets=buckets, hidden=hidden)
+  return token_ids
+
+def get_outputs(session, config, model, sentence, buckets=None, hidden=None):
+  token_ids = get_token_ids(sentence, config)
+  bucket_id = get_src_bucket_id(token_ids, buckets=buckets, hidden=hidden)
   enc_inputs, dec_inputs, trg_weights, seq_length, src_mask, trg_mask = model.get_batch(
     {bucket_id: [(token_ids, [])]}, bucket_id, config['encoder'])
   _, _, logits, states = model.get_state_step(session, enc_inputs, dec_inputs,
