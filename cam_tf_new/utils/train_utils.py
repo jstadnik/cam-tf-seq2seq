@@ -24,6 +24,7 @@ import shutil
 from collections import defaultdict
 import logging
 import subprocess
+import sys
 import re
 
 import model_utils
@@ -276,6 +277,8 @@ def eval_set(out, ref, cmd):
     return args
 
   try:
+    if not cmd:
+        cmd = '{} REF -lc'.format(os.path.join(os.path.abspath(sys.path[0]), 'utils/multi-bleu.perl'))
     multibleu = subprocess.check_output(**eval_args(out, ref, cmd))
     logging.info("{}".format(multibleu))
     m = re.match("BLEU = ([\d.]+),", multibleu)

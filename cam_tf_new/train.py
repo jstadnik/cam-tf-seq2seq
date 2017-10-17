@@ -34,6 +34,7 @@ tf.app.flags.DEFINE_string("dev_trg", None, "Target side of development data")
 tf.app.flags.DEFINE_string("dev_trg_idx", None, "Target side of development data (integer-mapped)")
 tf.app.flags.DEFINE_integer("max_sequence_length", 50, "Maximum length of source/target training sentences")
 tf.app.flags.DEFINE_integer("max_target_length", 0, "Maximum length of target training sentences: if 0, default to same as max_sequence_length")
+tf.app.flags.DEFINE_float("max_len_factor", 0, "If greater than 0, use single-step decoding during inference, with hypothesis length limited to max_len_factor times the length of the source sentence")
 tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
 tf.app.flags.DEFINE_integer("max_train_batches", 0, "Limit on the number of training batches.")
 tf.app.flags.DEFINE_integer("max_train_epochs", 0, "Limit on the number of training epochs.")
@@ -61,7 +62,7 @@ tf.app.flags.DEFINE_integer("eval_size", 80, "The number of examples to evaluate
 tf.app.flags.DEFINE_boolean("eval_bleu", False, "If True, decode dev set and measure BLEU instead of measuring perplexities")
 tf.app.flags.DEFINE_integer("eval_bleu_size", 0, "The number of dev sentences to translate (all if set to 0)")
 tf.app.flags.DEFINE_integer("eval_bleu_start", 10000, "Number of batches before starting BLEU evaluation on dev")
-tf.app.flags.DEFINE_string("eval_cmd", "/home/mifs/ds636/code/scripts/multi-bleu.perl REF -lc", "Path to BLEU eval script with space-delimited args. REF to be replaced by ref idx if needed. OUT to be replaced by out idx. If OUT is omitted, out idx is fed into stdin for the eval script")
+tf.app.flags.DEFINE_string("eval_cmd", None, "Path to BLEU eval script with space-delimited args. If left blank, defaults to multi-bleu (in utils) - see utils.train_utils.py  REF to be replaced by ref idx if needed. OUT to be replaced by out idx. If OUT is omitted, out idx is fed into stdin for the eval script")
 
 # Model configuration
 tf.app.flags.DEFINE_integer("src_vocab_size", 40000, "Source vocabulary size.")
@@ -108,6 +109,7 @@ tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99, "Learning rate dec
 tf.app.flags.DEFINE_boolean("adjust_lr", False, "Adjust learning rate independent of performance.")
 tf.app.flags.DEFINE_float("max_gradient_norm", 1.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_integer("batch_size", 80, "Batch size to use during training.")
+
 tf.app.flags.DEFINE_boolean("single_graph", False, "Use bucketing to select batches but a single graph to run the model.")
 
 # Mode

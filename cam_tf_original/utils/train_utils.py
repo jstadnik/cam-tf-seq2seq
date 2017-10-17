@@ -21,6 +21,7 @@ import numpy as np
 import math
 import pickle
 import shutil
+import sys
 from collections import defaultdict
 import logging
 
@@ -258,7 +259,8 @@ def eval_set(out, ref):
   import subprocess
   cat = subprocess.Popen(("cat", out), stdout=subprocess.PIPE)
   try:
-    multibleu = subprocess.check_output(("/home/mifs/ds636/code/scripts/multi-bleu.perl", "-lc", ref), stdin=cat.stdout)
+    script_path = os.path.join(os.path.abspath(sys.path[0]), 'utils/multi-bleu.perl')
+    multibleu = subprocess.check_output((script_path, "-lc", ref), stdin=cat.stdout)
     logging.info("{}".format(multibleu))
     import re
     m = re.match("BLEU = ([\d.]+),", multibleu)

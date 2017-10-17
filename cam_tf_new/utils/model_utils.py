@@ -90,7 +90,7 @@ def make_buckets(num_buckets, max_seq_len=50, add_src_eos=True, train=True, gree
       buckets = [ (int(max_seq_len/num_buckets)*i + src_offset, int(max_seq_len/num_buckets)*i + trg_offset) for i in range(1,num_buckets+1) ]
     else:
       # Buckets for decoding with single-step decoding graph: input length=1 on the target side)
-      buckets = [ (int(max_seq_len/num_buckets)*i + src_offset, 1) for i in range(1,num_buckets+1) ]
+      buckets = [ (int(max_seq_len*i/num_buckets) + src_offset, 1) for i in range(1,num_buckets+1) ]
 
   logging.info("Use buckets={}".format(buckets))
   return buckets
@@ -144,9 +144,12 @@ def create_model(session, config, forward_only, rename_variable_prefix=None, buc
     session.run(tf.global_variables_initializer())
   return model
 
-def load_model(session, config):
+def load_model(session, config, max_seq_len=None):
   """Load translation model with single-step graph for decoding"""
-  buckets = make_buckets(config['num_symm_buckets'], config['max_sequence_length'], config['add_src_eos'], train=False, max_trg_len=config['max_target_length'])
+  if max_seq_len == None:
+    max_seq_len = config['max_sequence_length']
+  logging.info('max seq len {}'.format(max_seq_len))
+  buckets = make_buckets(config['num_symm_buckets'], max_seq_len, config['add_src_eos'], train=False, max_trg_len=config['max_target_length'])
   model = get_singlestep_Seq2SeqModel(config, buckets)
   training_graph = model.create_training_graph() # Needed for loading variables
   encoding_graph = model.create_encoding_graph()
