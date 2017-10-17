@@ -29,8 +29,8 @@ from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import tensor_array_ops
 from tensorflow.python.ops import variable_scope as vs
 from tensorflow.python.util import nest
-from cam_tf_alignment.rnn import rnn_cell
-
+from rnn import rnn_cell
+import tensorflow as tf
 # pylint: disable=protected-access
 _state_size_with_prefix = rnn_cell._state_size_with_prefix
 # pylint: enable=protected-access
@@ -189,7 +189,7 @@ def rnn(cell, inputs, initial_state=None, dtype=None,
         # convert int to TensorShape if necessary
         size = _state_size_with_prefix(output_size, prefix=[batch_size])
         output = array_ops.zeros(
-            array_ops.pack(size), _infer_state_dtype(dtype, state))
+            array_ops.stack(size), _infer_state_dtype(dtype, state))
         shape = _state_size_with_prefix(
             output_size, prefix=[fixed_batch_size.value])
         output.set_shape(tensor_shape.TensorShape(shape))
@@ -206,7 +206,7 @@ def rnn(cell, inputs, initial_state=None, dtype=None,
 
 # TODO: check if the new version does the same as this
 #      zero_output = array_ops.zeros(
-#          array_ops.pack([batch_size, cell.output_size]), dtypes.float32)
+#          array_ops.stack([batch_size, cell.output_size]), dtypes.float32)
 #      zero_output.set_shape(
 #          tensor_shape.TensorShape([fixed_batch_size.value, cell.output_size]))
 
@@ -378,7 +378,7 @@ def _rnn_step(
     else:
       # time is 0-indexed, length is not
       copy_cond = (time >= sequence_length)
-    return math_ops.select(copy_cond, output, new_output)
+    return tf.where(copy_cond, output, new_output)
 
   def _copy_some_through(flat_new_output, flat_new_state):
     # Use broadcasting select to determine which values should get
@@ -486,7 +486,7 @@ def _reverse_seq(input_seq, lengths):
       input_.set_shape(input_shape)
 
     # Join into (time, batch_size, depth)
-    s_joined = array_ops.pack(sequence)
+    s_joined = array_ops.stack(sequence)
 
     # TODO(schuster, ebrevdo): Remove cast when reverse_sequence takes int32
     if lengths is not None:
@@ -495,7 +495,7 @@ def _reverse_seq(input_seq, lengths):
     # Reverse along dimension 0
     s_reversed = array_ops.reverse_sequence(s_joined, lengths, 0, 1)
     # Split again into list
-    result = array_ops.unpack(s_reversed)
+    result = array_ops.unstack(s_reversed)
     for r, flat_result in zip(result, flat_results):
       r.set_shape(input_shape)
       flat_result.append(r)
@@ -590,7 +590,7 @@ def bidirectional_rnn(cell_fw, cell_bw, inputs,
   flat_output_fw = nest.flatten(output_fw)
   flat_output_bw = nest.flatten(output_bw)
 
-  flat_outputs = tuple(array_ops.concat(1, [fw, bw])
+  flat_outputs = tuple(array_ops.concat(axis=1, values=[fw, bw])
                        for fw, bw in zip(flat_output_fw, flat_output_bw))
 
   outputs = nest.pack_sequence_as(structure=output_fw,
@@ -862,7 +862,7 @@ def dynamic_rnn(cell, inputs, sequence_length=None, initial_state=None,
 
     def _assert_has_shape(x, shape):
       x_shape = array_ops.shape(x)
-      packed_shape = array_ops.pack(shape)
+      packed_shape = array_ops.stack(shape)
       return control_flow_ops.Assert(
           math_ops.reduce_all(math_ops.equal(x_shape, packed_shape)),
           ["Expected shape for Tensor %s is " % x.name,
@@ -974,7 +974,7 @@ def _dynamic_rnn_loop(cell,
   def _create_zero_arrays(size):
     size = _state_size_with_prefix(size, prefix=[batch_size])
     return array_ops.zeros(
-        array_ops.pack(size), _infer_state_dtype(dtype, state))
+        array_ops.stack(size), _infer_state_dtype(dtype, state))
 
   flat_zero_output = tuple(_create_zero_arrays(output)
                            for output in flat_output_size)

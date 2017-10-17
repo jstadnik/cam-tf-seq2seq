@@ -74,8 +74,8 @@ from tensorflow.python.util import nest
 
 # TODO(ebrevdo): Remove once _linear is fully deprecated.
 
-from cam_tf_alignment.rnn import rnn, rnn_cell
-from cam_tf_alignment.seq2seq.wrapper_cells import BOWCell
+from rnn import rnn, rnn_cell
+from rnn.wrapper_cells import BOWCell
 linear = rnn_cell._linear  # pylint: disable=protected-access
 
 from tensorflow.python.ops.math_ops import tanh
@@ -648,14 +648,14 @@ def attention_decoder(decoder_inputs,
             if is_LSTM_cell(cell.get_cell()) or \
               is_LSTM_cell_with_dropout(cell.get_cell()):
               # single LSTM cell
-              return array_ops.concat(1, [C, h])
+              return array_ops.concat(axis=1, values=[C, h])
             else:
               # MultiRNNCell (multi LSTM cell)
-              unit = array_ops.concat(1, [C, h])
+              unit = array_ops.concat(axis=1, values=[C, h])
               state = unit
               count = 1
               while (count < cell.get_cell().num_layers):
-                state = array_ops.concat(1, [state, unit])
+                state = array_ops.concat(axis=1, values=[state, unit])
                 count += 1
               return state
         else:
@@ -680,7 +680,7 @@ def attention_decoder(decoder_inputs,
           ndims = q.get_shape().ndims
           if ndims:
             assert ndims == 2
-        query = array_ops.concat(1, query_list)
+        query = array_ops.concat(axis=1, values=query_list)
       for i in xrange(num_heads):
         with variable_scope.variable_scope("Attention_%d" % i):
           y = linear(query, attention_vec_size, True)
@@ -700,7 +700,7 @@ def attention_decoder(decoder_inputs,
 
     outputs = []
     prev = None
-    batch_attn_size = array_ops.pack([batch_size, attn_size])
+    batch_attn_size = array_ops.stack([batch_size, attn_size])
     attns = [array_ops.zeros(batch_attn_size, dtype=dtype)
              for _ in xrange(num_heads)]
     for a in attns:  # Ensure the second shape of attention vectors is set.
@@ -982,7 +982,7 @@ def embedding_attention_seq2seq(encoder_inputs,
     else:
       top_states = [array_ops.reshape(e, [-1, 1, cell.output_size])
                   for e in encoder_outputs]
-    attention_states = array_ops.concat(1, top_states)
+    attention_states = array_ops.concat(axis=1, values=top_states)
 
     initial_state = encoder_state
     if encoder == "bidirectional" and init_backward:
@@ -1202,9 +1202,9 @@ def sequence_loss_by_example(logits, targets, weights,
         # violates our general scalar strictness policy.
         target = array_ops.reshape(target, [-1])
         crossent = nn_ops.sparse_softmax_cross_entropy_with_logits(
-            logit, target)
+            logits=logit, labels=target)
       else:
-        crossent = softmax_loss_function(logit, target)
+        crossent = softmax_loss_function(logits=logit, labels=target)
       log_perp_list.append(crossent * weight)
     log_perps = math_ops.add_n(log_perp_list)
     if average_across_timesteps:

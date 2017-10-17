@@ -9,10 +9,9 @@ counterparts in tensorflow.models.rnn.seq2seq.
 
 from cam_tf_new.seq2seq.engine import Engine, TrainGraph, EncodingGraph,\
     SingleStepDecodingGraph
-from cam_tf_new.rnn import rnn
-from cam_tf_new.rnn import rnn_cell
+from rnn import rnn, rnn_cell
 from cam_tf_new.seq2seq.seq2seq_model import Seq2SeqModel
-from cam_tf_new.seq2seq.wrapper_cells import BidirectionalRNNCell, BOWCell
+from rnn.wrapper_cells import BidirectionalRNNCell, BOWCell
 
 
 from tensorflow.python.framework import dtypes
@@ -855,7 +854,7 @@ class TFSeq2SeqSingleStepDecodingGraph(SingleStepDecodingGraph):
             def init_state():
               logging.info("Init decoder state for bow")
               for a in xrange(num_heads):
-                s = array_ops.ones(array_ops.pack([batch_size, attn_length]), dtype=dtype)
+                s = array_ops.ones(array_ops.stack([batch_size, attn_length]), dtype=dtype)
                 s.set_shape([None, attn_length])
               
               # multiply with source mask, then do softmax
@@ -877,10 +876,10 @@ class TFSeq2SeqSingleStepDecodingGraph(SingleStepDecodingGraph):
                   if is_LSTM_cell(cell.get_cell()) or \
                     is_LSTM_cell_with_dropout(cell.get_cell()):
                     # single LSTM cell
-                    return array_ops.concat(1, [C, h])
+                    return array_ops.concat(axis=1, values=[C, h])
                   else:
                     # MultiRNNCell (multi LSTM cell)
-                    unit = array_ops.concat(1, [C, h])
+                    unit = array_ops.concat(axis=1, values=[C, h])
                     state = unit
                     count = 1
                     while (count < cell.get_cell().num_layers):
@@ -920,7 +919,7 @@ class TFSeq2SeqSingleStepDecodingGraph(SingleStepDecodingGraph):
                   ndims = q.get_shape().ndims
                   if ndims:
                     assert ndims == 2
-                query = array_ops.concat(1, query_list)
+                query = array_ops.concat(axis=1, values=query_list)
               for i in xrange(num_heads):
                 with variable_scope.variable_scope("Attention_%d" % i):                  
                   y = linear(query, attention_vec_size, True)

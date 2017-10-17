@@ -61,9 +61,8 @@ from __future__ import print_function
 from six.moves import xrange  # pylint: disable=redefined-builtin
 from six.moves import zip     # pylint: disable=redefined-builtin
 
-from cam_tf_new.seq2seq.wrapper_cells import BOWCell
-from cam_tf_new.rnn import rnn
-from cam_tf_new.rnn import rnn_cell
+from rnn.wrapper_cells import BOWCell
+from rnn import rnn, rnn_cell
 from tensorflow.python import shape
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
@@ -129,9 +128,9 @@ def rnn_grammar_decoder(decoder_inputs, initial_state, cell, grammar, loop_funct
     to_stack = None
     current_mask = None
     if loop_function is not None and grammar.use_trg_mask:
-      stack = [tf.concat(0, 
-                  (grammar.start,
-                   grammar.nop * tf.ones([grammar.stack_nops], dtype=tf.int32)))
+      stack = [tf.concat(axis=0, 
+                         values=(grammar.start,
+                                 grammar.nop * tf.ones([grammar.stack_nops], dtype=tf.int32)))
                for _ in range(grammar.batch_size)]  
       logging.info('Initialising sampling-only stack')
       if not grammar.rule_based:
@@ -174,7 +173,7 @@ def apply_rule_grammar(output, output_idx, stack, grammar, scope=None):
       trimmed_rhs = [tf.slice(r, [0], [tf.count_nonzero(r, dtype=tf.int32)])
                      for r in new_rhs]
       for seq_id in range(grammar.batch_size):
-        stack[seq_id] = tf.concat(0, (trimmed_rhs[seq_id], 
+        stack[seq_id] = tf.concat(axis=0, values=(trimmed_rhs[seq_id], 
                         tf.slice(stack[seq_id], [1], [-1])))
     return output
 
@@ -194,7 +193,7 @@ def apply_tok_grammar(output, output_idx, stack, keep_mask, current_mask, to_sta
       for i in range(grammar.batch_size):
         stack[i] = tf.cond(tf.squeeze(keep_mask[i]),
                            lambda: tf.identity(stack[i]),
-                           lambda: tf.concat(0, (tf.reshape(to_stack[i], [-1]), stack[i])))
+                           lambda: tf.concat(axis=0, values=(tf.reshape(to_stack[i], [-1]), stack[i])))
         to_stack[i] = tf.cond(tf.squeeze(keep_mask[i]),
                            lambda: tf.identity(to_stack[i]),
                            lambda:  tf.zeros(0, tf.int32))
@@ -211,7 +210,7 @@ def apply_tok_grammar(output, output_idx, stack, keep_mask, current_mask, to_sta
         keep_mask[i] = tf.gather(grammar.not_last_nt, chosen)
         is_nt = tf.gather(grammar.is_nt, chosen)
         to_stack[i] = tf.cond(tf.squeeze(is_nt), 
-                              lambda: tf.concat(0, (tf.reshape(to_stack[i], [-1]), chosen)),
+                              lambda: tf.concat(axis=0, values=(tf.reshape(to_stack[i], [-1]), chosen)),
                               lambda: tf.identity(to_stack))
       output = tf.reshape(masked_out, [grammar.batch_size, grammar.n_rules])
     return output 
@@ -689,7 +688,7 @@ def embedding_rnn_vae_seq2seq(encoder_inputs, decoder_inputs, cell,
     
     # Latent state
     if isinstance(encoder_out_state, tuple):
-      encoder_out_state = tf.concat(concat_dim=1, values=encoder_out_state)
+      encoder_out_state = tf.concat(axis=1, values=encoder_out_state)
     enc_state_size = get_state_size(enc_cell)
     z_mean_w = tf.get_variable('z_mean_w', [enc_state_size, latent_size])
     z_mean_b = tf.get_variable('z_mean_b', [latent_size])
@@ -724,10 +723,10 @@ def embedding_rnn_vae_seq2seq(encoder_inputs, decoder_inputs, cell,
       if isinstance(dec_cell.state_size, tuple):
         logging.info('Splitting fed hidden state before concatenation')
         enc_state_tuple = tuple(tf.split(1, 2, encoder_out_state))
-        initial_state = (tf.concat(concat_dim=1, values=[state, z]) 
+        initial_state = (tf.concat(axis=1, values=[state, z]) 
                          for state in enc_state_tuple)
       else:
-        initial_state = tf.concat(concat_dim=1, values=[initial_state, z])
+        initial_state = tf.concat(axis=1, values=[initial_state, z])
     else:
       dec_state_size = get_state_size(dec_cell)
       dec_in_w = tf.get_variable('dec_in_w', [latent_size, dec_state_size])
@@ -1004,7 +1003,7 @@ def attention_decoder(decoder_inputs,
       logging.info("Init decoder state for bow")
       for head in xrange(num_heads):
         # matrix of ones
-        s = array_ops.ones(array_ops.pack([batch_size, attn_length]), dtype=dtype)
+        s = array_ops.ones(array_ops.stack([batch_size, attn_length]), dtype=dtype)
         s.set_shape([None, attn_length])
 
         # multiply with source mask, then do softmax: a_i = 1/src_length
@@ -1025,14 +1024,14 @@ def attention_decoder(decoder_inputs,
             if is_LSTM_cell(cell.get_cell()) or \
               is_LSTM_cell_with_dropout(cell.get_cell()):
               # single LSTM cell
-              return array_ops.concat(1, [C, h])
+              return array_ops.concat(axis=1, values=[C, h])
             else:
               # MultiRNNCell (multi LSTM cell)
-              unit = array_ops.concat(1, [C, h])
+              unit = array_ops.concat(axis=1, values=[C, h])
               state = unit
               count = 1
               while (count < cell.get_cell().num_layers):
-                state = array_ops.concat(1, [state, unit])
+                state = array_ops.concat(axis=1, values=[state, unit])
                 count += 1
               return state
         else:
@@ -1057,7 +1056,7 @@ def attention_decoder(decoder_inputs,
           ndims = q.get_shape().ndims
           if ndims:
             assert ndims == 2
-        query = array_ops.concat(1, query_list)
+        query = array_ops.concat(axis=1, values=query_list)
       for head in xrange(num_heads):
         with variable_scope.variable_scope("Attention_%d" % head):
           y = linear(query, attention_vec_size, True)
@@ -1077,7 +1076,7 @@ def attention_decoder(decoder_inputs,
 
     outputs = []
     prev = None
-    batch_attn_size = array_ops.pack([batch_size, attn_size])
+    batch_attn_size = array_ops.stack([batch_size, attn_size])
     attns = [array_ops.zeros(batch_attn_size, dtype=dtype)
              for _ in xrange(num_heads)]
     for a in attns:  # Ensure the second shape of attention vectors is set.
@@ -1097,9 +1096,9 @@ def attention_decoder(decoder_inputs,
       current_mask = None
       to_stack = None
       if loop_function is not None and grammar.use_trg_mask:
-        stack = [tf.concat(0, 
-                           (grammar.start,
-                            grammar.nop * tf.ones([grammar.stack_nops], dtype=tf.int32)))
+        stack = [tf.concat(axis=0, 
+                           values=(grammar.start,
+                                   grammar.nop * tf.ones([grammar.stack_nops], dtype=tf.int32)))
                  for _ in range(grammar.batch_size)]  
         logging.info('Initialising sampling-only stack')
         if not grammar.rule_based:
@@ -1386,7 +1385,7 @@ def embedding_attention_seq2seq(encoder_inputs,
     else:
       top_states = [array_ops.reshape(e, [-1, 1, cell.output_size])
                   for e in encoder_outputs]
-    attention_states = array_ops.concat(1, top_states)
+    attention_states = array_ops.concat(axis=1, values=top_states)
 
     initial_state = encoder_state
     if encoder == "bidirectional" and init_backward:
@@ -1607,9 +1606,9 @@ def sequence_loss_by_example(logits, targets, weights,
         # violates our general scalar strictness policy.
         target = array_ops.reshape(target, [-1])
         crossent = nn_ops.sparse_softmax_cross_entropy_with_logits(
-            logit, target)
+            logits=logit, labels=target)
       else:
-        crossent = softmax_loss_function(logit, target)
+        crossent = softmax_loss_function(logits=logit, labels=target)
       log_perp_list.append(crossent * weight)
     log_perps = math_ops.add_n(log_perp_list)
     if average_across_timesteps:

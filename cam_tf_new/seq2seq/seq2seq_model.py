@@ -26,8 +26,8 @@ from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
 
 from cam_tf_new.utils import data_utils
-from cam_tf_new.seq2seq.wrapper_cells import BidirectionalRNNCell, BOWCell
-from cam_tf_new.rnn import rnn_cell
+from rnn.wrapper_cells import BidirectionalRNNCell, BOWCell
+from rnn import rnn_cell
 import cam_tf_new.seq2seq.seq2seq as s2s
 import logging
 from tensorflow.core.protobuf import saver_pb2
