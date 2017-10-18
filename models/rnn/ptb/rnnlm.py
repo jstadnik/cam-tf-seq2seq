@@ -1,6 +1,6 @@
 import logging
 import tensorflow as tf
-from cam_tf_new.rnn import rnn
+from rnn import rnn, rnn_cell
 
 def log10(x):
   numerator = tf.log(x)
@@ -25,11 +25,11 @@ class RNNLMModel(object):
     # Slightly better results can be obtained with forget gate biases
     # initialized to 1 but the hyperparameters of the model would need to be
     # different than reported in the paper.
-    lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_size, forget_bias=0.0)
+    lstm_cell = rnn_cell.BasicLSTMCell(hidden_size, forget_bias=0.0)
     if is_training and config.keep_prob < 1:
-      lstm_cell = tf.nn.rnn_cell.DropoutWrapper(
+      lstm_cell = rnn_cell.DropoutWrapper(
           lstm_cell, output_keep_prob=config.keep_prob)
-    cell = tf.nn.rnn_cell.MultiRNNCell([lstm_cell] * config.num_layers)
+    cell = rnn_cell.MultiRNNCell([lstm_cell] * config.num_layers)
 
     if is_training or use_log_probs:
       logging.info("Using LSTM cells of size={}".format(hidden_size))

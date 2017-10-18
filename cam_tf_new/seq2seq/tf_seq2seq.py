@@ -385,7 +385,7 @@ class TFSeq2SeqEncodingGraph(EncodingGraph):
             else:
               top_states = [array_ops.reshape(e, [-1, 1, cell.output_size])
                           for e in encoder_outputs]
-            attention_states = array_ops.concat(1, top_states)
+            attention_states = array_ops.concat(axis=1, values=top_states)
 
             initial_state = encoder_state
             if encoder == "bidirectional" and init_backward:
@@ -883,7 +883,7 @@ class TFSeq2SeqSingleStepDecodingGraph(SingleStepDecodingGraph):
                     state = unit
                     count = 1
                     while (count < cell.get_cell().num_layers):
-                      state = array_ops.concat(1, [state, unit])
+                      state = array_ops.concat(axis=1, values=[state, unit])
                       count += 1
                     return state
               else:

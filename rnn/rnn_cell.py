@@ -62,8 +62,8 @@ from tensorflow.python.platform import tf_logging as logging
 from tensorflow.python.util import nest
 
 
-_BIAS_VARIABLE_NAME = "bias"
-_WEIGHTS_VARIABLE_NAME = "kernel"
+_BIAS_VARIABLE_NAME = "Bias"
+_WEIGHTS_VARIABLE_NAME = "Matrix"
 
 def _state_size_with_prefix(state_size, prefix=None):
   """Helper function that enables int or TensorShape shape specification.
@@ -951,7 +951,8 @@ def _linear(args,
             output_size,
             bias,
             bias_initializer=None,
-            kernel_initializer=None):
+            kernel_initializer=None,
+            scope=None):
   """Linear map: sum_i(args[i] * W[i]), where W[i] is a variable.
   Args:
     args: a 2D Tensor or a list of 2D, batch x n, Tensors.
@@ -986,8 +987,9 @@ def _linear(args,
   dtype = [a.dtype for a in args][0]
 
   # Now the computation.
-  scope = vs.get_variable_scope()
-  with vs.variable_scope(scope) as outer_scope:
+  #scope = vs.get_variable_scope() 
+  #with vs.variable_scope(scope) as outer_scope:
+  with vs.variable_scope(scope or "Linear") as outer_scope:
     weights = vs.get_variable(
         _WEIGHTS_VARIABLE_NAME, [total_arg_size, output_size],
         dtype=dtype,
