@@ -385,7 +385,7 @@ def embedding_rnn_seq2seq(encoder_inputs,
     state_list = outputs_and_state[outputs_len:]
     state = state_list[0]
     if nest.is_sequence(encoder_state):
-      state = nest.pack_sequence_as(structure=encoder_state,
+      state = nest.stack_sequence_as(structure=encoder_state,
                                     flat_sequence=state_list)
     return outputs_and_state[:outputs_len], state
 
@@ -429,7 +429,7 @@ def embedding_tied_rnn_seq2seq(encoder_inputs,
       of decoder_inputs will be used (the "GO" symbol), and all other decoder
       inputs will be taken from previous outputs (as in embedding_rnn_decoder).
       If False, decoder_inputs are used as given (the standard decoder case).
-    dtype: The dtype to use for the initial RNN states (default: tf.float32).
+    dtype: The dtype to use for the initial .RNN states (default: tf.float32).
     scope: VariableScope for the created subgraph; defaults to
       "embedding_tied_rnn_seq2seq".
 
@@ -505,7 +505,7 @@ def embedding_tied_rnn_seq2seq(encoder_inputs,
       batch_size = array_ops.shape(encoder_inputs[0])[0]
     zero_state = cell.zero_state(batch_size, dtype)
     if nest.is_sequence(zero_state):
-      state = nest.pack_sequence_as(structure=zero_state,
+      state = nest.stack_sequence_as(structure=zero_state,
                                     flat_sequence=state_list)
     return outputs_and_state[:outputs_len], state
 
@@ -627,7 +627,7 @@ def attention_decoder(decoder_inputs,
       logging.info("Init decoder state for bow")
       for i in xrange(num_heads):
         # matrix of ones
-        s = array_ops.ones(array_ops.pack([batch_size, attn_length]), dtype=dtype)
+        s = array_ops.ones(array_ops.stack([batch_size, attn_length]), dtype=dtype)
         s.set_shape([None, attn_length])
 
         # multiply with source mask, then do softmax: a_i = 1/src_length
@@ -1055,7 +1055,7 @@ def embedding_attention_seq2seq(encoder_inputs,
     state_list = outputs_and_state[outputs_len:]
     state = state_list[0]
     if nest.is_sequence(encoder_state):
-      state = nest.pack_sequence_as(structure=encoder_state,
+      state = nest.stack_sequence_as(structure=encoder_state,
                                     flat_sequence=state_list)
     return outputs_and_state[:outputs_len], state
 
@@ -1159,7 +1159,7 @@ def one2many_rnn_seq2seq(encoder_inputs,
           state_list = outputs_and_state[outputs_len:]
           state = state_list[0]
           if nest.is_sequence(encoder_state):
-            state = nest.pack_sequence_as(structure=encoder_state,
+            state = nest.stack_sequence_as(structure=encoder_state,
                                           flat_sequence=state_list)
       outputs_dict[name] = outputs
       state_dict[name] = state

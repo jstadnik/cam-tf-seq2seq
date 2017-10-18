@@ -385,7 +385,7 @@ def embedding_rnn_seq2seq(encoder_inputs,
     state_list = outputs_and_state[outputs_len:]
     state = state_list[0]
     if nest.is_sequence(encoder_state):
-      state = nest.pack_sequence_as(structure=encoder_state,
+      state = nest.stack_sequence_as(structure=encoder_state,
                                     flat_sequence=state_list)
     return outputs_and_state[:outputs_len], state
 
@@ -505,7 +505,7 @@ def embedding_tied_rnn_seq2seq(encoder_inputs,
       batch_size = array_ops.shape(encoder_inputs[0])[0]
     zero_state = cell.zero_state(batch_size, dtype)
     if nest.is_sequence(zero_state):
-      state = nest.pack_sequence_as(structure=zero_state,
+      state = nest.stack_sequence_as(structure=zero_state,
                                     flat_sequence=state_list)
     return outputs_and_state[:outputs_len], state
 
@@ -1055,7 +1055,7 @@ def embedding_attention_seq2seq(encoder_inputs,
     state_list = outputs_and_state[outputs_len:]
     state = state_list[0]
     if nest.is_sequence(encoder_state):
-      state = nest.pack_sequence_as(structure=encoder_state,
+      state = nest.stack_sequence_as(structure=encoder_state,
                                     flat_sequence=state_list)
     return outputs_and_state[:outputs_len], state
 
@@ -1159,7 +1159,7 @@ def one2many_rnn_seq2seq(encoder_inputs,
           state_list = outputs_and_state[outputs_len:]
           state = state_list[0]
           if nest.is_sequence(encoder_state):
-            state = nest.pack_sequence_as(structure=encoder_state,
+            state = nest.stack_sequence_as(structure=encoder_state,
                                           flat_sequence=state_list)
       outputs_dict[name] = outputs
       state_dict[name] = state
