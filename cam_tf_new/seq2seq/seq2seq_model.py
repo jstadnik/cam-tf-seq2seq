@@ -170,32 +170,31 @@ class Seq2SeqModel(object):
       if use_lstm:
         logging.info("Using LSTM cells")
         if initializer:
-          single_cell = rnn_cell.LSTMCell(n_hidden, initializer=initializer)
+          cell = rnn_cell.LSTMCell(n_hidden, initializer=initializer)
         else:
           # to use peephole connections, cell clipping or a projection layer, use LSTMCell
-          single_cell = rnn_cell.BasicLSTMCell(n_hidden)
+          cell = rnn_cell.BasicLSTMCell(n_hidden)
       else:
         logging.info("Using GRU cells")
-        single_cell = rnn_cell.GRUCell(n_hidden)
-      cell = single_cell
+        cell = rnn_cell.GRUCell(n_hidden)
       if not forward_only and use_lstm and keep_prob < 1:
         logging.info("Adding dropout wrapper around lstm cells")
-        single_cell = rnn_cell.DropoutWrapper(single_cell, output_keep_prob=keep_prob)
+        cell = rnn_cell.DropoutWrapper(cell, output_keep_prob=keep_prob)
       if encoder == "bidirectional":
         logging.info("Bidirectional model")
         if init_backward:
           logging.info("Use backward encoder state to initialize decoder state")
-        cell = BidirectionalRNNCell([single_cell] * 2)
+        cell = BidirectionalRNNCell([cell] * 2)
       elif encoder == "bow":
         logging.info("BOW model")
         if num_layers > 1:
           logging.info("Model with %d layers for the decoder" % num_layers)
-          cell = BOWCell(rnn_cell.MultiRNNCell([single_cell] * num_layers))
+          cell = BOWCell(rnn_cell.MultiRNNCell([cell] * num_layers))
         else:
           cell = BOWCell(single_cell)
       elif num_layers > 1:
         logging.info("Model with %d layers" % num_layers)
-        cell = rnn_cell.MultiRNNCell([single_cell] * num_layers)
+        cell = rnn_cell.MultiRNNCell([cell] * num_layers)
       return cell
 
     cell = get_cell(hidden_size)

@@ -273,7 +273,7 @@ class TFSeq2SeqEncodingGraph(EncodingGraph):
             input_feed[self.encoder_inputs[l].name] = encoder_inputs[l]
             
         if sequence_length is not None:
-          logging.debug("Using sequence length for encoder: feed")
+          #logging.debug("Using sequence length for encoder: feed")
           input_feed[self.sequence_length.name] = sequence_length                    
     
         # run the model for given bucket_id
@@ -648,14 +648,14 @@ class TFSeq2SeqSingleStepDecodingGraph(SingleStepDecodingGraph):
             input_feed[self.dec_attns[bucket_id][a]] = dec_state["dec_attns_%d" % a]
                 
         if use_src_mask:
-          logging.debug("Using source mask for decoder: feed") 
+          #logging.debug("Using source mask for decoder: feed") 
           input_feed[self.src_mask.name] = dec_state["src_mask"]
         
         if word_count > 0:
           input_feed[self.start] = False
         else:
           input_feed[self.start] = True
-        logging.debug("Word count = {} start = {}".format(word_count, input_feed[self.start]))
+        #logging.debug("Word count = {} start = {}".format(word_count, input_feed[self.start]))
 
         if use_bow_mask:
           logging.debug("Using bow mask for output layer: feed") 
