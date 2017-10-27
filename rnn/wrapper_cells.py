@@ -123,7 +123,7 @@ class BOWCell(RNNCell):
 
   def __call__(self, inputs, state, scope=None):
       # call underlying cell
-      logging.debug("CALL RNN CELL")
+      #logging.debug("CALL RNN CELL")
       return self._cell.__call__(inputs, state, scope)
   
 

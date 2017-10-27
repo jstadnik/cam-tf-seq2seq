@@ -652,9 +652,9 @@ class Seq2SeqModel(object):
     for length_idx in xrange(encoder_size):
       for batch_idx in xrange(self.batch_size):
         if encoder_inputs[batch_idx][length_idx] == data_utils.PAD_ID:
-          if self.src_mask is not None:
+          if self.src_mask is not None and length_idx >= enc_input_lengths[batch_idx]:
             src_mask[batch_idx, length_idx] = 0
-          if self.no_pad_symbol:
+          if self.no_pad_symbol and length_idx >= enc_input_lengths[batch_idx]:
             encoder_inputs[batch_idx][length_idx] = data_utils.EOS_ID
 
         if self.bow_mask is not None:
@@ -680,7 +680,7 @@ class Seq2SeqModel(object):
         # The corresponding target is decoder_input shifted by 1 forward.
         if length_idx < decoder_size - 1:
           target = decoder_inputs[batch_idx][length_idx + 1]
-        if length_idx == decoder_size - 1 or target == data_utils.PAD_ID:
+        if length_idx == decoder_size - 1 or (target == data_utils.PAD_ID and not self.no_pad_symbol):
           batch_weight[batch_idx] = 0.0
         if self.no_pad_symbol and decoder_inputs[batch_idx][length_idx] == data_utils.PAD_ID:
           decoder_inputs[batch_idx][length_idx] = data_utils.EOS_ID
@@ -699,6 +699,7 @@ class Seq2SeqModel(object):
       logging.debug("encoder input={}".format(encoder_inputs[batch_idx]))
     logging.debug("Sequence length={}".format(sequence_length))
     logging.debug("Source mask={}".format(src_mask))
+    logging.debug("batch weights={}".format(batch_weights_trg))
     if self.bow_mask is not None:
       logging.debug("BOW mask={} (sum={})".format(bow_mask, np.sum(bow_mask)))
       

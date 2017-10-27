@@ -733,7 +733,7 @@ class EmbeddingWrapper(RNNCell):
     return self._cell.output_size
 
   def __call__(self, inputs, state, scope=None):
-    logging.debug("_call_EmbeddingWrapper")
+    #logging.debug("_call_EmbeddingWrapper")
     """Run the cell on embedded inputs."""
     with vs.variable_scope(scope or type(self).__name__):  # "EmbeddingWrapper"
       with ops.device("/cpu:0"):
@@ -762,7 +762,7 @@ class EmbeddingWrapper(RNNCell):
 class Embedder(EmbeddingWrapper):
 
   def __call__(self, inputs, scope=None):
-    logging.debug("_call_EmbeddingWrapper")
+    #logging.debug("_call_EmbeddingWrapper")
     """Only embeds inputs, does not change any RNN state."""
     with vs.variable_scope(scope or type(self).__name__):  # "EmbeddingWrapper"
       with ops.device("/cpu:0"):
