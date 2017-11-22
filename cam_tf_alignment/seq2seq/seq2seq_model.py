@@ -245,7 +245,7 @@ class Seq2SeqModel(object):
 
     # Training outputs and losses.
     if forward_only:
-      self.outputs, self.losses = model_with_buckets(
+      self.outputs, self.losses, self.atts = model_with_buckets(
           self.encoder_inputs, self.decoder_inputs, targets,
           self.target_weights, buckets, 
           lambda x, y, z: seq2seq_f(x, y, True, z),
@@ -261,7 +261,7 @@ class Seq2SeqModel(object):
               for output in self.outputs[b]
           ]
     else:
-      self.outputs, self.losses = model_with_buckets(
+      self.outputs, self.losses, self.atts = model_with_buckets(
           self.encoder_inputs, self.decoder_inputs, targets,
           self.target_weights, buckets,
           lambda x, y, z: seq2seq_f(x, y, False, z),
@@ -385,17 +385,47 @@ class Seq2SeqModel(object):
     if not forward_only:                 
       output_feed = [self.updates[bucket_id],  # Update Op that does SGD.
                      self.gradient_norms[bucket_id],  # Gradient norm.
-                     self.losses[bucket_id]]  # Loss for this batch.
-
-      outputs = session.run(output_feed, input_feed)      
+                     self.losses[bucket_id]] #,  # Loss for this batch.
+                     #self.atts[bucket_id]]
+ 
+      outputs = session.run(output_feed, input_feed)
+      #print(outputs[3])      
       return outputs[1], outputs[2], None  # Gradient norm, loss, no outputs.     
     else:
-      output_feed = [self.losses[bucket_id]]  # Loss for this batch.
+      output_feed = [self.losses[bucket_id]] # Loss for this batch.
+      print("ATTS\n\n\n")
+      print("decoder size:")
+      print(decoder_size)
+      print("self.atts length")
+      print(len(self.atts))
+      print("self.outputs length")
+      print(len(self.outputs))
+      #print(self.atts)
+      print("self.outputs[bucket_id] length")
+      print(len(self.outputs[bucket_id]))
+      print("self.atts[bucket_id] length")
+      print(len(self.atts[bucket_id]))
+      print(bucket_id)
+      print("self.losses length")
+      print(len(self.losses))
+      #for l in xrange(decoder_size):  # Output logits.
       for l in xrange(decoder_size):  # Output logits.
-        output_feed.append(self.outputs[bucket_id][l])       
+        output_feed.append(self.outputs[bucket_id][l]) 
+#      output_feed.append(self.atts[0][0])
+    
+      for l in xrange(decoder_size):  # Output logits.
+        output_feed.append(self.atts[bucket_id][l]) 
 
-      outputs = session.run(output_feed, input_feed)
-      return None, outputs[0], outputs[1:]  # No gradient norm, loss, outputs.
+      outputs = session.run(output_feed, feed_dict=input_feed)
+      
+      #print(outputs[1])
+      print(outputs[decoder_size+1])
+      print(np.sum(outputs[decoder_size+1]))
+      algs = []
+      for thing in outputs[decoder_size+1:]:
+        algs.append(np.argmax(thing))
+      print(algs)
+      return None, outputs[0], outputs[1:decoder_size+1]  # No gradient norm, loss, outputs.
 
   def get_batch(self, data, bucket_id, encoder="reverse", batch_ptr=None, bookk=None):
     """Get a random batch of data from the specified bucket, prepare for step.

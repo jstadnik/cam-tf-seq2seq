@@ -673,6 +673,7 @@ def attention_decoder(decoder_inputs,
 
     def attention(query):
       """Put attention masks on hidden using hidden_features and query."""
+      ass = []
       ds = []  # Results of attention reads will be stored here.
       if nest.is_sequence(query):  # If the query is a tuple, flatten it.
         query_list = nest.flatten(query)
@@ -692,15 +693,18 @@ def attention_decoder(decoder_inputs,
           if src_mask is not None:
             s = s * src_mask
           a = nn_ops.softmax(s)
+          ass.append(a)
           # Now calculate the attention-weighted vector d.
           d = math_ops.reduce_sum(
               array_ops.reshape(a, [-1, attn_length, 1, 1]) * hidden, [1, 2])
           ds.append(array_ops.reshape(d, [-1, attn_size]))
-      return ds
+      return ds, ass
 
     outputs = []
+    attnss = []
     prev = None
     batch_attn_size = array_ops.stack([batch_size, attn_size])
+    print(batch_attn_size)
     attns = [array_ops.zeros(batch_attn_size, dtype=dtype)
              for _ in xrange(num_heads)]
     for a in attns:  # Ensure the second shape of attention vectors is set.
@@ -724,6 +728,7 @@ def attention_decoder(decoder_inputs,
       input_size = inp.get_shape().with_rank(2)[1]
       if input_size.value is None:
         raise ValueError("Could not infer input size from input: %s" % inp.name)
+      #attnss.append(attns)
       x = linear([inp] + attns, input_size, True)
       # Run the RNN.
       cell_output, state = cell(x, state) # run cell on combination of input and previous attn masks
@@ -732,10 +737,11 @@ def attention_decoder(decoder_inputs,
       if i == 0 and initial_state_attention:
         with variable_scope.variable_scope(variable_scope.get_variable_scope(),
                                            reuse=True):
-          attns = attention(state) # calculate new attention masks (attention-weighted src vector)
+          attns, ass = attention(state) # calculate new attention masks (attention-weighted src vector)
       else:
-        attns = attention(state) # calculate new attention masks (attention-weighted src vector)
+        attns, ass = attention(state) # calculate new attention masks (attention-weighted src vector)
 
+      attnss.append(ass)
       if maxout_layer:
         # This tries to imitate the blocks Readout layer, consisting of Merge, Bias, Maxout, Linear, Linear
         # Merge: cell.output_size
@@ -776,7 +782,7 @@ def attention_decoder(decoder_inputs,
       outputs.append(output)
 
   logging.info("output size={}".format(output.get_shape()))
-  return outputs, state
+  return outputs, state, attnss
 
 
 def embedding_attention_decoder(decoder_inputs,
@@ -1300,14 +1306,17 @@ def model_with_buckets(encoder_inputs, decoder_inputs, targets, weights,
   all_inputs = encoder_inputs + decoder_inputs + targets + weights
   losses = []
   outputs = []
+  attnsss = []
   with ops.name_scope(name, "model_with_buckets", all_inputs):
     for j, bucket in enumerate(buckets):
       with variable_scope.variable_scope(variable_scope.get_variable_scope(),
                                          reuse=True if j > 0 else None):
-        bucket_outputs, _ = seq2seq(encoder_inputs[:bucket[0]],
+        bucket_outputs, _, attnss = seq2seq(encoder_inputs[:bucket[0]],
                                     decoder_inputs[:bucket[1]],
                                     bucket[0])
+	
         outputs.append(bucket_outputs)
+        attnsss.append(attnss)
         if per_example_loss:
           losses.append(sequence_loss_by_example(
               outputs[-1], targets[:bucket[1]], weights[:bucket[1]],
@@ -1319,4 +1328,4 @@ def model_with_buckets(encoder_inputs, decoder_inputs, targets, weights,
               softmax_loss_function=softmax_loss_function,
             trg_alignments=alignments))
 
-  return outputs, losses
+  return outputs, losses, attnsss
