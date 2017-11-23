@@ -176,7 +176,7 @@ class Seq2SeqModel(object):
     scope = None
     if variable_prefix is not None:
       scope = variable_prefix+"/embedding_attention_seq2seq"
-      logging.info("Using variable scope {}".format(scope)) 
+      logging.info("Using variable scope {}".format(scope))
     def seq2seq_f(encoder_inputs, decoder_inputs, do_decode, bucket_length):
       return embedding_attention_seq2seq(
           encoder_inputs,
@@ -208,7 +208,7 @@ class Seq2SeqModel(object):
     self.alignments = []
     for i in xrange(buckets[-1][0]):  # Last bucket is the biggest one.
       self.encoder_inputs.append(tf.placeholder(tf.int32, shape=[None],
-                                                name="encoder{0}".format(i)))                                                      
+                                                name="encoder{0}".format(i)))
     for i in xrange(buckets[-1][1] + 1):
       self.decoder_inputs.append(tf.placeholder(tf.int32, shape=[None],
                                                 name="decoder{0}".format(i)))
@@ -220,11 +220,11 @@ class Seq2SeqModel(object):
                                               name="align{0}".format(i)))
 
     if use_sequence_length is True:
-      logging.info("Using sequence length for encoder")                          
+      logging.info("Using sequence length for encoder")
       self.sequence_length = tf.placeholder(tf.int32, shape=[None], name="seq_len")
     else:
       self.sequence_length = None
-      
+
     if use_src_mask:
       logging.info("Using source mask for decoder")
       self.src_mask = tf.placeholder(tf.float32, shape=[None, None],
@@ -247,14 +247,14 @@ class Seq2SeqModel(object):
     if forward_only:
       self.outputs, self.losses, self.atts = model_with_buckets(
           self.encoder_inputs, self.decoder_inputs, targets,
-          self.target_weights, buckets, 
+          self.target_weights, buckets,
           lambda x, y, z: seq2seq_f(x, y, True, z),
           softmax_loss_function=softmax_loss_function)
       # If we use output projection, we need to project outputs for decoding.
       if output_projection is not None:
         for b in xrange(len(buckets)):
           # This is similar to what is done in the loop function (where xw_plus_b is used instead of matmul).
-          # The loop function also takes the argmax, but the result is not saved, we pass the logits 
+          # The loop function also takes the argmax, but the result is not saved, we pass the logits
           # and take the argmax again in the vanilla decoder.
           self.outputs[b] = [
               tf.matmul(output, output_projection[0]) + output_projection[1]
@@ -282,10 +282,10 @@ class Seq2SeqModel(object):
         init_acc = 0.1
         opt = tf.train.AdagradOptimizer(lr, init_acc)
       elif opt_algorithm == "adadelta":
-        print ("Using optimizer AdadeltaOptimizer")  
+        print ("Using optimizer AdadeltaOptimizer")
         rho = 0.95
         epsilon = 1e-6
-        opt = tf.train.AdadeltaOptimizer(rho=rho, epsilon=epsilon)        
+        opt = tf.train.AdadeltaOptimizer(rho=rho, epsilon=epsilon)
 
       for b in xrange(len(buckets)):
         gradients = tf.gradients(self.losses[b], params)
@@ -294,7 +294,7 @@ class Seq2SeqModel(object):
         self.gradient_norms.append(norm)
         self.updates.append(opt.apply_gradients(
             zip(clipped_gradients, params), global_step=self.global_step))
-   
+
     if variable_prefix:
       # save only the variables that belong to the prefix
       logging.info("Using variable prefix={}".format(variable_prefix))
@@ -361,7 +361,7 @@ class Seq2SeqModel(object):
     if sequence_length is not None:
       logging.debug("Using sequence length for encoder: feed")
       input_feed[self.sequence_length.name] = sequence_length
-      
+
     if src_mask is not None:
       logging.debug("Using source mask for decoder: feed")
       input_feed[self.src_mask.name] = src_mask
@@ -369,28 +369,28 @@ class Seq2SeqModel(object):
     if bow_mask is not None:
       logging.debug("Using bow mask for decoder: feed")
       input_feed[self.bow_mask.name] = bow_mask
-    
+
     if alignments is not None:
       logging.debug("Including alignment matrices in input feed")
       for a in xrange(self.batch_size):
         input_feed[self.alignments[a].name] = alignments[a]
-        
+
 
     # Since our targets are decoder inputs shifted by one, we need one more.
     last_target = self.decoder_inputs[decoder_size].name
 #    print("last_target={}".format(last_target))
     input_feed[last_target] = np.zeros([self.batch_size], dtype=np.int32)
-    
+
     # Output feed: depends on whether we do a backward step or not.
-    if not forward_only:                 
+    if not forward_only:
       output_feed = [self.updates[bucket_id],  # Update Op that does SGD.
                      self.gradient_norms[bucket_id],  # Gradient norm.
                      self.losses[bucket_id]] #,  # Loss for this batch.
                      #self.atts[bucket_id]]
- 
+
       outputs = session.run(output_feed, input_feed)
-      #print(outputs[3])      
-      return outputs[1], outputs[2], None  # Gradient norm, loss, no outputs.     
+      #print(outputs[3])
+      return outputs[1], outputs[2], None  # Gradient norm, loss, no outputs.
     else:
       output_feed = [self.losses[bucket_id]] # Loss for this batch.
       print("ATTS\n\n\n")
@@ -405,27 +405,24 @@ class Seq2SeqModel(object):
       print(len(self.outputs[bucket_id]))
       print("self.atts[bucket_id] length")
       print(len(self.atts[bucket_id]))
-      print(bucket_id)
-      print("self.losses length")
-      print(len(self.losses))
-      #for l in xrange(decoder_size):  # Output logits.
+#      print(bucket_id)
+#      print("self.losses length")
+#      print(len(self.losses))
       for l in xrange(decoder_size):  # Output logits.
-        output_feed.append(self.outputs[bucket_id][l]) 
-#      output_feed.append(self.atts[0][0])
-    
+        output_feed.append(self.outputs[bucket_id][l])
       for l in xrange(decoder_size):  # Output logits.
-        output_feed.append(self.atts[bucket_id][l]) 
+        output_feed.append(self.atts[bucket_id][l])
+
 
       outputs = session.run(output_feed, feed_dict=input_feed)
-      
-      #print(outputs[1])
-      print(outputs[decoder_size+1])
-      print(np.sum(outputs[decoder_size+1]))
+
+#      print(np.sum(outputs[decoder_size+1]))
       algs = []
       for thing in outputs[decoder_size+1:]:
         algs.append(np.argmax(thing))
       print(algs)
-      return None, outputs[0], outputs[1:decoder_size+1]  # No gradient norm, loss, outputs.
+
+      return None, outputs[0], outputs[1:decoder_size+1], outputs[decoder_size+1:]  # No gradient norm, loss, outputs.
 
   def get_batch(self, data, bucket_id, encoder="reverse", batch_ptr=None, bookk=None):
     """Get a random batch of data from the specified bucket, prepare for step.
@@ -447,7 +444,7 @@ class Seq2SeqModel(object):
     if batch_ptr is not None:
       train_idx = batch_ptr["offset"]
       idx_map = batch_ptr["idx_map"]
-    
+
     encoder_size, decoder_size = self.buckets[bucket_id]
     encoder_inputs, decoder_inputs, alignment_inputs = [], [], []
 
@@ -479,7 +476,7 @@ class Seq2SeqModel(object):
       # Decoder inputs get an extra "GO" symbol, and are padded then.
       decoder_pad_size = decoder_size - len(decoder_input) - 1
       decoder_inputs.append([data_utils.GO_ID] + decoder_input +
-                            [data_utils.PAD_ID] * decoder_pad_size)       
+                            [data_utils.PAD_ID] * decoder_pad_size)
 
     # Now we create batch-major vectors from the data selected above.
     batch_encoder_inputs, batch_decoder_inputs, batch_weights_trg = [], [], []
@@ -493,7 +490,7 @@ class Seq2SeqModel(object):
       bow_mask = np.zeros((self.batch_size, self.target_vocab_size), dtype=np.float32)
 
     # Batch encoder inputs are just re-indexed encoder_inputs.
-    for length_idx in xrange(encoder_size):                     
+    for length_idx in xrange(encoder_size):
       for batch_idx in xrange(self.batch_size):
         if encoder_inputs[batch_idx][length_idx] == data_utils.PAD_ID:
           if self.src_mask is not None:
@@ -511,7 +508,7 @@ class Seq2SeqModel(object):
       batch_encoder_inputs.append(
           np.array([encoder_inputs[batch_idx][length_idx]
                     for batch_idx in xrange(self.batch_size)], dtype=np.int32))
-                      
+
     # Batch decoder inputs are re-indexed decoder_inputs, we create weights.
     for length_idx in xrange(decoder_size):
       # Create target_weights to be 0 for targets that are padding.
@@ -531,12 +528,12 @@ class Seq2SeqModel(object):
       batch_decoder_inputs.append(
           np.array([decoder_inputs[batch_idx][length_idx]
                     for batch_idx in xrange(self.batch_size)], dtype=np.int32))
-      
+
     # Make sequence length vector
     sequence_length = None
     if self.sequence_length is not None:
       sequence_length = np.array([enc_input_lengths[batch_idx]
-                                for batch_idx in xrange(self.batch_size)], dtype=np.int32)                                
+                                for batch_idx in xrange(self.batch_size)], dtype=np.int32)
 
     for batch_idx in xrange(self.batch_size):
       logging.debug("encoder input={}".format(encoder_inputs[batch_idx]))
