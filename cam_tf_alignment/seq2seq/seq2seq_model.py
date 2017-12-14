@@ -244,7 +244,14 @@ class Seq2SeqModel(object):
                for i in xrange(len(self.decoder_inputs) - 1)]
 
     # Training outputs and losses.
-    if forward_only:
+    if forward_only == "do_decode":
+      print("correct outputs\n\n\n")
+      self.outputs, self.losses, self.atts = model_with_buckets(
+          self.encoder_inputs, self.decoder_inputs, targets,
+          self.target_weights, buckets,
+          lambda x, y, z: seq2seq_f(x, y, False, z),
+          softmax_loss_function=softmax_loss_function)
+    elif forward_only:
       self.outputs, self.losses, self.atts = model_with_buckets(
           self.encoder_inputs, self.decoder_inputs, targets,
           self.target_weights, buckets,
@@ -382,7 +389,18 @@ class Seq2SeqModel(object):
     input_feed[last_target] = np.zeros([self.batch_size], dtype=np.int32)
 
     # Output feed: depends on whether we do a backward step or not.
-    if not forward_only:
+
+    if forward_only == "do_decode":
+      print("correct feed\n\n\n")
+      output_feed = [self.losses[bucket_id]] # Loss for this batch.
+      for l in xrange(decoder_size):  # Output logits.
+        output_feed.append(self.outputs[bucket_id][l])
+      for l in xrange(decoder_size):  # Output logits.
+        output_feed.append(self.atts[bucket_id][l])
+      outputs = session.run(output_feed, feed_dict=input_feed)
+      return None, outputs[0], outputs[1:decoder_size+1], outputs[decoder_size+1:]  # No gradient norm, loss, outputs.
+
+    elif not forward_only:
       output_feed = [self.updates[bucket_id],  # Update Op that does SGD.
                      self.gradient_norms[bucket_id],  # Gradient norm.
                      self.losses[bucket_id]] #,  # Loss for this batch.
