@@ -114,7 +114,9 @@ def train(config):
     else logging.info("Just get them attentions")
 
   # Get training data.
-  src_train, trg_train, src_dev, trg_dev = data_utils.get_training_data(config)
+  src_train = config['train_src_idx']
+  trg_train = config['train_trg_idx']
+
 
   # Set device
   device = "/cpu:0"
@@ -128,7 +130,7 @@ def train(config):
     # Create model
     if config['fixed_random_seed']:
       tf.set_random_seed(1234)
-    model = model_utils.create_model(session, config, forward_only=False)
+    model = model_utils.create_model(session, config, forward_only="do_decode")
 
     #if config['save_npz']:
     #  config['filetype'] = 'npz'
@@ -150,10 +152,10 @@ def train(config):
         data_args.update(align_file=None, align_delimits=None)
     else:
       train_set = data_utils.read_data(**data_args)
-    data_args.update(source_path=src_dev, target_path=trg_dev, max_size=None)
-    dev_set = data_utils.read_data(**data_args)
-    tmpfile = config['train_dir']+"/tmp_idx.pkl"
-    tmpfile_bookk = config['train_dir']+"/tmp_bookk.pkl"
+#    data_args.update(source_path=src_dev, target_path=trg_dev, max_size=None)
+#    dev_set = data_utils.read_data(**data_args)
+#    tmpfile = config['train_dir']+"/tmp_idx.pkl"
+#    tmpfile_bookk = config['train_dir']+"/tmp_bookk.pkl"
     train_buckets_scale, train_idx_map, bucket_offset_pairs, train_size, num_train_batches, bookk, epoch = \
       train_utils.prepare_buckets(model,
                                   train_set,
@@ -170,42 +172,42 @@ def train(config):
     current_bleu = 0 # used for model saving
     current_batch_idx = None
     while True:
-      current_batch_idx = model.global_step.eval() % num_train_batches
-      if current_batch_idx == 0:
-        # New epoch
-        epoch = int(model.global_step.eval() / num_train_batches) + 1
-        logging.info("Epoch=%i" % epoch)
-
-        # Shuffle train variables and save result
-        if config['train_sequential']:
-          if config['shuffle_data']:
-            logging.info("Shuffle train idx maps and batch pointers")
-            for b in xrange(len(model_utils._buckets)):
-              random.shuffle(train_idx_map[b]) # shuffle training idx map for each bucket
-            random.shuffle(bucket_offset_pairs) # shuffle the bucket_id, offset pairs
-
-          if os.path.isfile(tmpfile):
-            os.rename(tmpfile, tmpfile+".old")
-          with open(tmpfile, "wb") as f:
-            logging.info("Epoch %i, save training example permutation to path=%s" % (epoch,tmpfile))
-            pickle.dump((train_idx_map, bucket_offset_pairs, epoch), f, pickle.HIGHEST_PROTOCOL)
-
-        # Debugging: check if all training examples have been processed in the past epoch
-        if config['debug']:
-          if epoch > 1 and bookk is not None:
-            lengths = [ len(bookk[b].keys()) for b in bookk.keys() ]
-            logging.info("After epoch %i: Total examples=%i, processed examples=%i" % (epoch-1, train_size, sum(lengths)))
-            #assert train_size == sum(lengths), "ERROR: training set has not been fully processed"
-            if train_size != sum(lengths):
-              logging.error("Training set has not been fully processed")
-            bookk.clear()
-
-        # Adjust learning rate independent of performance
-        if config['adjust_lr'] and config['max_epoch'] > 0:
-          lr_decay_factor = config['learning_rate_decay_factor'] ** max(epoch - config['max_epoch'], 0.0)
-          session.run(model.learning_rate.assign(config['learning_rate'] * lr_decay_factor))
-          logging.info("Learning rate={}".format(model.learning_rate.eval()))
-      #endif new epoch
+#      current_batch_idx = model.global_step.eval() % num_train_batches
+#      if current_batch_idx == 0:
+#        # New epoch
+#        epoch = int(model.global_step.eval() / num_train_batches) + 1
+#        logging.info("Epoch=%i" % epoch)
+#
+#        # Shuffle train variables and save result
+#        if config['train_sequential']:
+#          if config['shuffle_data']:
+#            logging.info("Shuffle train idx maps and batch pointers")
+#            for b in xrange(len(model_utils._buckets)):
+#              random.shuffle(train_idx_map[b]) # shuffle training idx map for each bucket
+#            random.shuffle(bucket_offset_pairs) # shuffle the bucket_id, offset pairs
+#
+#          if os.path.isfile(tmpfile):
+#            os.rename(tmpfile, tmpfile+".old")
+#          with open(tmpfile, "wb") as f:
+#            logging.info("Epoch %i, save training example permutation to path=%s" % (epoch,tmpfile))
+#            pickle.dump((train_idx_map, bucket_offset_pairs, epoch), f, pickle.HIGHEST_PROTOCOL)
+#
+#        # Debugging: check if all training examples have been processed in the past epoch
+#        if config['debug']:
+#          if epoch > 1 and bookk is not None:
+#            lengths = [ len(bookk[b].keys()) for b in bookk.keys() ]
+#            logging.info("After epoch %i: Total examples=%i, processed examples=%i" % (epoch-1, train_size, sum(lengths)))
+#            #assert train_size == sum(lengths), "ERROR: training set has not been fully processed"
+#            if train_size != sum(lengths):
+#              logging.error("Training set has not been fully processed")
+#            bookk.clear()
+#
+#        # Adjust learning rate independent of performance
+#        if config['adjust_lr'] and config['max_epoch'] > 0:
+#          lr_decay_factor = config['learning_rate_decay_factor'] ** max(epoch - config['max_epoch'], 0.0)
+#          session.run(model.learning_rate.assign(config['learning_rate'] * lr_decay_factor))
+#          logging.info("Learning rate={}".format(model.learning_rate.eval()))
+#      #endif new epoch
 
       # Get a bucket_id or bucket_id + batch_ptr (if train_sequential)
       bucket_id, batch_ptr = train_utils.get_bucket_or_batch_ptr(model, train_buckets_scale, train_idx_map,
@@ -231,42 +233,42 @@ def train(config):
         train_utils.print_stats(model, loss, step_time, config['opt_algorithm'])
         #model_utils.save_model(session, config, model, epoch)
 
-        # Debugging: save book keeping dict
-        if config['debug']:
-          if os.path.isfile(tmpfile_bookk):
-            os.rename(tmpfile_bookk, tmpfile_bookk+".old")
-          with open(tmpfile_bookk, "wb") as f:
-            logging.info("Epoch %i, save book keeping variable to path=%s" % (epoch, tmpfile_bookk))
-            pickle.dump(bookk, f, pickle.HIGHEST_PROTOCOL)
+#        # Debugging: save book keeping dict
+#        if config['debug']:
+#          if os.path.isfile(tmpfile_bookk):
+#            os.rename(tmpfile_bookk, tmpfile_bookk+".old")
+#          with open(tmpfile_bookk, "wb") as f:
+#            logging.info("Epoch %i, save book keeping variable to path=%s" % (epoch, tmpfile_bookk))
+#            pickle.dump(bookk, f, pickle.HIGHEST_PROTOCOL)
 
-        # Decrease learning rate if no improvement was seen over last 3 times.
-        if len(previous_losses) > 2 and loss > max(previous_losses[-3:]) and config['opt_algorithm'] == "sgd":
-          session.run(model.learning_rate_decay_op)
-          logging.info("Decrease learning rate to {}".format(model.learning_rate.eval()))
-        previous_losses.append(loss)
-
+#        # Decrease learning rate if no improvement was seen over last 3 times.
+#        if len(previous_losses) > 2 and loss > max(previous_losses[-3:]) and config['opt_algorithm'] == "sgd":
+#          session.run(model.learning_rate_decay_op)
+#          logging.info("Decrease learning rate to {}".format(model.learning_rate.eval()))
+#        previous_losses.append(loss)
+#
         # Zero timer and loss.
         step_time, loss = 0.0, 0.0
-
-        # Run evals on development set and print their perplexity.
-        if current_step % (config['steps_per_checkpoint'] * config['eval_frequency']) == 0:
-          if config['eval_bleu']:
-            if model.global_step.eval() >= config['eval_bleu_start']:
-              current_bleu = train_utils.decode_dev(config, model, current_bleu)
-            else:
-              logging.info("Waiting until global step %i for BLEU evaluation on dev" % config['eval_bleu_start'])
-          else:
-            current_eval_ppxs = train_utils.run_eval(config, session, model, dev_set, current_eval_ppxs)
-        logging.info("Time: {}".format(datetime.datetime.strftime(datetime.datetime.now(), '%Y-%m-%d %H:%M:%S')))
-      #endif save checkpoint
-
-      if (config['max_train_batches'] > 0 and model.global_step.eval() >= config['max_train_batches']) or \
-        (config['max_train_epochs'] > 0 and epoch == config['max_train_epochs'] and current_batch_idx + 1 == num_train_batches):
-          if current_step % config['steps_per_checkpoint'] != 0:
-            model_utils.save_model(session, config, model, epoch)
-          logging.info("Stopped training after %i epochs" % epoch)
-          logging.info("Time: {}".format(datetime.datetime.strftime(datetime.datetime.now(), '%Y-%m-%d %H:%M:%S')))
-          break
+#
+#        # Run evals on development set and print their perplexity.
+#        if current_step % (config['steps_per_checkpoint'] * config['eval_frequency']) == 0:
+#          if config['eval_bleu']:
+#            if model.global_step.eval() >= config['eval_bleu_start']:
+#              current_bleu = train_utils.decode_dev(config, model, current_bleu)
+#            else:
+#              logging.info("Waiting until global step %i for BLEU evaluation on dev" % config['eval_bleu_start'])
+#          else:
+#            current_eval_ppxs = train_utils.run_eval(config, session, model, dev_set, current_eval_ppxs)
+#        logging.info("Time: {}".format(datetime.datetime.strftime(datetime.datetime.now(), '%Y-%m-%d %H:%M:%S')))
+#      #endif save checkpoint
+#
+#      if (config['max_train_batches'] > 0 and model.global_step.eval() >= config['max_train_batches']) or \
+#        (config['max_train_epochs'] > 0 and epoch == config['max_train_epochs'] and current_batch_idx + 1 == num_train_batches):
+#          if current_step % config['steps_per_checkpoint'] != 0:
+#            model_utils.save_model(session, config, model, epoch)
+#          logging.info("Stopped training after %i epochs" % epoch)
+#          logging.info("Time: {}".format(datetime.datetime.strftime(datetime.datetime.now(), '%Y-%m-%d %H:%M:%S')))
+#          break
 
 def self_test():
   """Test the translation model."""
