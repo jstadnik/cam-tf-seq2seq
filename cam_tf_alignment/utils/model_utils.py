@@ -11,19 +11,19 @@ from tensorflow.python.ops import array_ops
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
 # Default buckets:
-_buckets = [(5, 10), (10, 15), (20, 25), (40, 50)] 
+_buckets = [(5, 10), (10, 15), (20, 25), (40, 50)]
 
 def read_config(config_file, config):
   def is_bool(v):
     return v.lower() in ('true', 't', 'false', 'f')
 
   def str2bool(v):
-    return v.lower() in ('true', 't')  
-  
+    return v.lower() in ('true', 't')
+
   if not config_file or not os.path.isfile(config_file):
     raise ValueError("Cannot load config file %s" % config_file)
 
-  logging.info("Settings from tensorflow config file:")    
+  logging.info("Settings from tensorflow config file:")
   with open(config_file) as f:
     for line in f:
       if line.strip():
@@ -31,7 +31,7 @@ def read_config(config_file, config):
         if value == "None":
           value = None
         elif is_bool(value):
-          value = str2bool(value)      
+          value = str2bool(value)
         elif re.match("^\d+$", value):
           value = int(value)
         elif re.match("^[\d\.]+$", value):
@@ -39,7 +39,7 @@ def read_config(config_file, config):
         config[key] = value
         logging.info("{}: {}".format(key, value))
 
-def process_args(FLAGS, train=True, greedy_decoder=False):
+def process_args(FLAGS, train=True, greedy_decoder=False, special_decode=False):
   config = dict()
 
   # First read command line flags
@@ -51,21 +51,25 @@ def process_args(FLAGS, train=True, greedy_decoder=False):
     read_config(config['config_file'], config)
 
   if train and not config['train_dir']:
-     raise ValueError("Must set --train_dir")
+    raise ValueError("Must set --train_dir")
 
   # Process specific args
   if config['opt_algorithm'] not in [ "sgd", "adagrad", "adadelta" ]:
     raise Exception("Unknown optimization algorithm: {}".format(config['opt_algorithm']))
   if config['num_symm_buckets'] > 0:
-    global _buckets
-    _buckets = make_buckets(config['num_symm_buckets'], config['max_sequence_length'],
+    if not special_decode:
+      global _buckets
+      _buckets = make_buckets(config['num_symm_buckets'], config['max_sequence_length'],
                             config['add_src_eos'], train, greedy_decoder)
+    else:
+      global _buckets
+      _bucket = make_buckets(config['num_symm_buckets'], config['max_sequence_length'], config['add_src_eos'], True, False)
 
   if config['no_pad_symbol']:
     data_utils.no_pad_symbol()
     logging.info("UNK_ID=%d" % data_utils.UNK_ID)
     logging.info("PAD_ID=%d" % data_utils.PAD_ID)
-    
+
   return config
 
 def make_buckets(num_buckets, max_seq_len=50, add_src_eos=True, train=True, greedy_decoder=False):

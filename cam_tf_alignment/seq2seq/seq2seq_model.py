@@ -244,14 +244,7 @@ class Seq2SeqModel(object):
                for i in xrange(len(self.decoder_inputs) - 1)]
 
     # Training outputs and losses.
-    if forward_only == "do_decode":
-      print("correct outputs\n\n\n")
-      self.outputs, self.losses, self.atts = model_with_buckets(
-          self.encoder_inputs, self.decoder_inputs, targets,
-          self.target_weights, buckets,
-          lambda x, y, z: seq2seq_f(x, y, False, z),
-          softmax_loss_function=softmax_loss_function)
-    elif forward_only:
+    if forward_only and forward_only != "do_decode":
       self.outputs, self.losses, self.atts = model_with_buckets(
           self.encoder_inputs, self.decoder_inputs, targets,
           self.target_weights, buckets,

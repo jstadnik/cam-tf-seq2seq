@@ -69,6 +69,9 @@ def decode(config, input_file=None, output=None, max_sentences=0):
     if max_sentences > 0:
       max_sents = max_sentences
 
+    if out_atts:
+        open(out_atts, 'wb').close()
+
     logging.info("Start decoding, max_sentences=%i" % max_sents)
     with open(inp) as f_in, open(trg_idx, 'r') as f_trg, open(out, 'w') as f_out:
       for sentence in f_in:
@@ -142,7 +145,7 @@ def get_outputs(session, config, model, sentence, trg, buckets=None):
   return outputs, attns
 
 def main(_):
-  config = model_utils.process_args(FLAGS, train=False, greedy_decoder=True)
+  config = model_utils.process_args(FLAGS, train=False, greedy_decoder=True, special_decode=True)
   if FLAGS.interactive:
     decode_interactive(config)
   else:
