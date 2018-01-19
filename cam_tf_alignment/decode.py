@@ -1,5 +1,4 @@
 """Binary for decoding from translation models based on tensorflow/models/rnn/translate/translate.py.
-
 Note that this decoder is greedy and very basic. For a better decoder, see http://ucam-smt.github.io/sgnmt/html/tutorial.html
 which supports decoding from tensorflow models.
 """
@@ -11,7 +10,6 @@ import sys
 import numpy as np
 import datetime
 import logging
-import pickle
 
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
@@ -23,7 +21,6 @@ from cam_tf_alignment.utils import data_utils, model_utils
 # Decoder settings
 tf.app.flags.DEFINE_string("test_src_idx", "/tmp/in.txt", "An integer-encoded input file")
 tf.app.flags.DEFINE_string("test_out_idx", "/tmp/out.txt", "Output file for decoder output")
-tf.app.flags.DEFINE_string("atts_out", None, "Output file for attentions")
 tf.app.flags.DEFINE_integer("max_sentences", 0, "The maximum number of sentences to translate (all if set to 0)")
 tf.app.flags.DEFINE_boolean("interactive", False, "Decode from command line")
 FLAGS = tf.app.flags.FLAGS
@@ -32,11 +29,9 @@ def decode(config, input_file=None, output=None, max_sentences=0):
   if input_file and output:
     inp = input_file
     out = output
-    out_atts = None
   else:
     inp = config['test_src_idx']
     out = config['test_out_idx']
-    out_atts = config['atts_out']
 
   # Find longest input to create suitable bucket
   max_input_length = 0
@@ -69,18 +64,13 @@ def decode(config, input_file=None, output=None, max_sentences=0):
     logging.info("Start decoding, max_sentences=%i" % max_sents)
     with open(inp) as f_in, open(out, 'w') as f_out:
       for sentence in f_in:
-        outputs, attns = get_outputs(session, config, model, sentence, buckets)
+        outputs = get_outputs(session, config, model, sentence, buckets)
         logging.info("Output: {}".format(outputs))
 
         # If there is an EOS symbol in outputs, cut them at that point.
         if data_utils.EOS_ID in outputs:
           outputs = outputs[:outputs.index(data_utils.EOS_ID)]
         print(" ".join([str(tok) for tok in outputs]), file=f_out)
-
-        # Dump the attentions to a file
-        if out_atts:
-            with open(out_atts, "ab") as f:
-                pickle.dump(attns, f, pickle.HIGHEST_PROTOCOL)
 
         num_sentences += 1
         if max_sents > 0 and num_sentences >= max_sents:
@@ -124,13 +114,13 @@ def get_outputs(session, config, model, sentence, buckets=None):
     {bucket_id: [(token_ids, [])]}, bucket_id, config['encoder'])
 
   # Get output logits for the sentence.
-  _, _, output_logits, attns = model.step(session, encoder_inputs, decoder_inputs,
+  _, _, output_logits = model.step(session, encoder_inputs, decoder_inputs,
                                  target_weights, bucket_id, forward_only=True,
                                  sequence_length=sequence_length, src_mask=src_mask, bow_mask=bow_mask)
 
   # This is a greedy decoder - outputs are just argmaxes of output_logits.
   outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
-  return outputs, attns
+  return outputs
 
 def main(_):
   config = model_utils.process_args(FLAGS, train=False, greedy_decoder=True)
@@ -143,5 +133,4 @@ if __name__ == "__main__":
   logging.getLogger().setLevel(logging.INFO)
   logging.info("Start: {}".format(datetime.datetime.strftime(datetime.datetime.now(), '%Y-%m-%d %H:%M:%S')))
   tf.app.run()
-  logging.info("End: {}".format(datetime.datetime.strftime(datetime.datetime.now(), '%Y-%m-%d %H:%M:%S')))
-
+logging.info("End: {}".format(datetime.datetime.strftime(datetime.datetime.now(), '%Y-%m-%d %H:%M:%S')))

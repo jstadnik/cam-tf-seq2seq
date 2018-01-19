@@ -403,37 +403,12 @@ class Seq2SeqModel(object):
       #print(outputs[3])
       return outputs[1], outputs[2], None  # Gradient norm, loss, no outputs.
     else:
-      output_feed = [self.losses[bucket_id]] # Loss for this batch.
-      print("ATTS\n\n\n")
-      print("decoder size:")
-      print(decoder_size)
-      print("self.atts length")
-      print(len(self.atts))
-      print("self.outputs length")
-      print(len(self.outputs))
-      #print(self.atts)
-      print("self.outputs[bucket_id] length")
-      print(len(self.outputs[bucket_id]))
-      print("self.atts[bucket_id] length")
-      print(len(self.atts[bucket_id]))
-#      print(bucket_id)
-#      print("self.losses length")
-#      print(len(self.losses))
+      output_feed = [self.losses[bucket_id]]  # Loss for this batch.
       for l in xrange(decoder_size):  # Output logits.
-        output_feed.append(self.outputs[bucket_id][l])
-      for l in xrange(decoder_size):  # Output logits.
-        output_feed.append(self.atts[bucket_id][l])
+        output_feed.append(self.outputs[bucket_id][l])       
 
-
-      outputs = session.run(output_feed, feed_dict=input_feed)
-
-#      print(np.sum(outputs[decoder_size+1]))
-      algs = []
-      for thing in outputs[decoder_size+1:]:
-        algs.append(np.argmax(thing))
-      print(algs)
-
-      return None, outputs[0], outputs[1:decoder_size+1], outputs[decoder_size+1:]  # No gradient norm, loss, outputs.
+      outputs = session.run(output_feed, input_feed)
+      return None, outputs[0], outputs[1:] # No gradient norm, loss, outputs.
 
   def get_batch(self, data, bucket_id, encoder="reverse", batch_ptr=None, bookk=None):
     """Get a random batch of data from the specified bucket, prepare for step.

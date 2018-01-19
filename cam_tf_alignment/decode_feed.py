@@ -41,7 +41,7 @@ def decode(config, input_file=None, output=None, max_sentences=0):
     out_atts = config['atts_out']
     trg_idx = config['trg_idx']
 
-  # Find longest input to create suitable bucket
+  # Find longest input/output to create suitable bucket
   max_input_length = 0
   with open(inp) as f_in:
     for sentence in f_in:
@@ -50,7 +50,15 @@ def decode(config, input_file=None, output=None, max_sentences=0):
         token_ids.append(data_utils.EOS_ID)
       if len(token_ids) > max_input_length:
         max_input_length = len(token_ids)
-  bucket = model_utils.make_bucket(max_input_length, greedy_decoder=True)
+  max_output_length = 0
+  with open(trg_idx) as f_out:
+    for sentence in f_out:
+      trg_ids = [ int(tok) for tok in sentence.strip().split() ]
+      if config['add_src_eos']:
+        trg_ids.append(data_utils.EOS_ID)
+      if len(trg_ids) > max_output_length:
+        max_output_length = len(trg_ids)
+  bucket = model_utils.make_bucket(max([max_input_length, max_output_length]), greedy_decoder=True)
   buckets = list(model_utils._buckets)
   buckets.append(bucket)
   logging.info("Add new bucket={}".format(bucket))
@@ -126,7 +134,7 @@ def get_outputs(session, config, model, sentence, trg, buckets=None):
   if not buckets:
     buckets = model_utils._buckets
   bucket_id = min([b for b in xrange(len(buckets))
-                  if buckets[b][0] >= len(token_ids)])
+                  if buckets[b][0] >= len(token_ids) and buckets[b][1] >= len(trg_ids)])
   logging.info("Bucket {}".format(buckets[bucket_id]))
   logging.info("Input: {}".format(token_ids))
   logging.info("Output: {}".format(trg_ids))
