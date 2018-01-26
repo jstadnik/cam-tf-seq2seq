@@ -168,7 +168,8 @@ def get_Seq2SeqModel(config, buckets, forward_only, rename_variable_prefix=None)
       initializer=get_initializer(config),
       rename_variable_prefix=rename_variable_prefix,
       train_align=config['train_align'],
-      legacy=config['legacy'])
+      legacy=config['legacy'],
+      entropy=config['entropy'])
 
 def get_singlestep_Seq2SeqModel(config, buckets):
   return tf_seq2seq.TFSeq2SeqEngine(

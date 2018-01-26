@@ -76,7 +76,8 @@ class Seq2SeqModel(object):
                keep_prob=1.0,
                initializer=None,
                legacy=False,
-               train_align=None):
+               train_align=None,
+               entropy=False):
     """Create the model.
 
     Args:
@@ -266,7 +267,7 @@ class Seq2SeqModel(object):
           self.target_weights, buckets,
           lambda x, y, z: seq2seq_f(x, y, False, z),
           softmax_loss_function=softmax_loss_function,
-          alignments=self.alignments)
+          alignments=self.alignments, entropy=entropy)
 
     # Gradients and SGD update operation for training the model.
     params = tf.trainable_variables()
@@ -405,7 +406,7 @@ class Seq2SeqModel(object):
     else:
       output_feed = [self.losses[bucket_id]]  # Loss for this batch.
       for l in xrange(decoder_size):  # Output logits.
-        output_feed.append(self.outputs[bucket_id][l])       
+        output_feed.append(self.outputs[bucket_id][l])
 
       outputs = session.run(output_feed, input_feed)
       return None, outputs[0], outputs[1:] # No gradient norm, loss, outputs.
