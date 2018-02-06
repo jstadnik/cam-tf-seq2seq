@@ -77,7 +77,7 @@ class Seq2SeqModel(object):
                initializer=None,
                legacy=False,
                train_align=None,
-               entropy=False):
+               entropy=0.0):
     """Create the model.
 
     Args:

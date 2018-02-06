@@ -12,7 +12,7 @@ Sequential approach:
 
 --> the original data is unchanged and we only need the bucket_offset_pairs and the train_idx_map
 
-For debugging: 
+For debugging:
 Tick off which training examples we have processed: bookk[bucket_id][idx_map[train_idx]] = 1
 """
 
@@ -39,7 +39,7 @@ def prepare_buckets(model, train_set, tmpfile, tmpfile_bookk, train_sequential, 
     # to select a bucket. Length of [scale[i], scale[i+1]] is proportional to
     # the size if i-th training bucket, as used later.
     train_buckets_scale = [sum(train_bucket_sizes[:i + 1]) / train_size
-                           for i in xrange(len(train_bucket_sizes))]     
+                           for i in xrange(len(train_bucket_sizes))]
 
     if train_sequential:
       train_size_old = train_size
@@ -129,6 +129,7 @@ def get_batch_ptr(model, train_idx_map, bucket_offset_pairs, current_batch_idx, 
 
   # This is for debugging only: make sure the order is preserved after reloading the model
   global_step = model.global_step.eval()+1
+  logging.info("Global step=%i" % global_step)
   if global_step % 100 == 0:
     logging.info("Global step=%i" % global_step)
   if current_batch_idx+2 < len(bucket_offset_pairs) and (current_step+1) % steps_per_checkpt == 0:
@@ -142,7 +143,7 @@ def get_batch_ptr(model, train_idx_map, bucket_offset_pairs, current_batch_idx, 
                   bucket_offset_pair_2, idx_map_2[bucket_offset_pair_2[1]] ))
   else:
     logging.debug("Global step={}, current batch idx={} bucket_id={}, offset={}-->{}".format(global_step, current_batch_idx, bucket_id, train_offset, idx_map[train_offset] ))
-  
+
   batch_ptr = { "offset": train_offset, "idx_map": idx_map }
   return bucket_id, batch_ptr
 
@@ -268,4 +269,4 @@ def eval_set(out, ref):
   except Exception, e:
     logging.info("Multi-bleu error: {}".format(e))
     return 0.0
-  
+

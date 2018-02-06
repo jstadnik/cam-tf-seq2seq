@@ -103,7 +103,7 @@ tf.app.flags.DEFINE_boolean("save_npz", False, "Save model in npz format")
 tf.app.flags.DEFINE_string("train_align", None, "File containing sparse target alignment matrices, defined by rows of triples 'i j val'")
 tf.app.flags.DEFINE_string("align_val_delimit", ',', "Alignment val delimiter")
 tf.app.flags.DEFINE_string("align_triple_delimit", ';', "Alignment triple delimiter")
-tf.app.flags.DEFINE_boolean("entropy", False, "Add reducing entropy as criteria")
+tf.app.flags.DEFINE_float("entropy", 0.0, "Add reducing entropy as criteria")
 
 FLAGS = tf.app.flags.FLAGS
 

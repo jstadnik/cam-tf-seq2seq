@@ -80,7 +80,7 @@ linear = rnn_cell._linear  # pylint: disable=protected-access
 
 from tensorflow.python.ops.math_ops import tanh
 
-from itertools import chain
+from itertools import chain, izip
 import tensorflow as tf
 
 import logging
@@ -710,7 +710,7 @@ def attention_decoder(decoder_inputs,
     for a in attns:  # Ensure the second shape of attention vectors is set.
       a.set_shape([None, attn_size])
     if initial_state_attention:
-      attns = attention(initial_state)
+      attns, _ = attention(initial_state)
 
     if maxout_layer:
       logging.info("Output layer consists of: Merge, Bias, Maxout, Linear, Linear")
@@ -1176,7 +1176,7 @@ def one2many_rnn_seq2seq(encoder_inputs,
 def sequence_loss_by_example(logits, targets, weights,
                              average_across_timesteps=True,
                              softmax_loss_function=None, name=None,
-                             trg_alignments=None, entropy=False, attnss=None, lamb=0.05):
+                             trg_alignments=None, entropy=0.0, attnss=None):
   """Weighted cross-entropy loss for a sequence of logits (per example).
 
   Args:
@@ -1201,33 +1201,35 @@ def sequence_loss_by_example(logits, targets, weights,
   with ops.name_scope(name, "sequence_loss_by_example",
                       logits + targets + weights):
     log_perp_list = []
-    if entropy:
-        for logit, target, weight, attns in zip(logits, targets, weights, attnss):
-          if softmax_loss_function is None:
-            # TODO(irving,ebrevdo): This reshape is needed because
-            # sequence_loss_by_example is called with scalars sometimes, which
-            # violates our general scalar strictness policy.
-            target = array_ops.reshape(target, [-1])
-            crossent = nn_ops.sparse_softmax_cross_entropy_with_logits(
-               logits=logit, labels=target)
-          else:
-            crossent = softmax_loss_function(logits=logit, labels=target)
-          #crossent+=lamb*sum((att*tf.log(att)/tf.log(2.0)) for att in attns)
-          #crossent+=lamb*sum((att*tf.log(att)) for att in attns)
-          crossent += nn_ops.softmax_cross_entropy_with_logits(logits=attns, labels=attns)
-          log_perp_list.append(crossent * weight)
-    else:
-        for logit, target, weight in zip(logits, targets, weights):
-          if softmax_loss_function is None:
-            # TODO(irving,ebrevdo): This reshape is needed because
-            # sequence_loss_by_example is called with scalars sometimes, which
-            # violates our general scalar strictness policy.
-            target = array_ops.reshape(target, [-1])
-            crossent = nn_ops.sparse_softmax_cross_entropy_with_logits(
-               logits=logit, labels=target)
-          else:
-            crossent = softmax_loss_function(logits=logit, labels=target)
-          log_perp_list.append(crossent * weight)
+#    if entropy:
+    for logit, target, weight, attns in zip(logits, targets, weights, attnss):
+
+      if softmax_loss_function is None:
+        # TODO(irving,ebrevdo): This reshape is needed because
+        # sequence_loss_by_example is called with scalars sometimes, which
+        # violates our general scalar strictness policy.
+        target = array_ops.reshape(target, [-1])
+        crossent = nn_ops.sparse_softmax_cross_entropy_with_logits(
+           logits=logit, labels=target)
+      else:
+        crossent = softmax_loss_function(logits=logit, labels=target)
+      #crossent+=lamb*sum((att*tf.log(att)/tf.log(2.0)) for att in attns)
+      #crossent+=lamb*sum((att*tf.log(att)) for att in attns)
+      crossent += entropy*nn_ops.softmax_cross_entropy_with_logits(logits=attns, labels=attns)
+      #crossent -= entropy*tf.reduce_sum(attns * tf.log(attns), [2])
+      log_perp_list.append(crossent * weight)
+#    else:
+#        for logit, target, weight in zip(logits, targets, weights):
+#          if softmax_loss_function is None:
+#            # TODO(irving,ebrevdo): This reshape is needed because
+#            # sequence_loss_by_example is called with scalars sometimes, which
+#            # violates our general scalar strictness policy.
+#            target = array_ops.reshape(target, [-1])
+#            crossent = nn_ops.sparse_softmax_cross_entropy_with_logits(
+#               logits=logit, labels=target)
+#          else:
+#            crossent = softmax_loss_function(logits=logit, labels=target)
+#          log_perp_list.append(crossent * weight)
     log_perps = math_ops.add_n(log_perp_list)
     if average_across_timesteps:
       total_size = math_ops.add_n(weights)
@@ -1239,7 +1241,7 @@ def sequence_loss_by_example(logits, targets, weights,
 def sequence_loss(logits, targets, weights,
                   average_across_timesteps=True, average_across_batch=True,
                   softmax_loss_function=None, name=None,
-                  trg_alignments=None, entropy=False, attnss=None):
+                  trg_alignments=None, entropy=0.0, attnss=None):
   """Weighted cross-entropy loss for a sequence of logits, batch-collapsed.
 
   Args:
@@ -1274,7 +1276,7 @@ def sequence_loss(logits, targets, weights,
 
 def model_with_buckets(encoder_inputs, decoder_inputs, targets, weights,
                        buckets, seq2seq, softmax_loss_function=None,
-                       per_example_loss=False, name=None, alignments=None, entropy=False):
+                       per_example_loss=False, name=None, alignments=None, entropy=0.0):
   """Create a sequence-to-sequence model with support for bucketing.
 
   The seq2seq argument is a function that defines a sequence-to-sequence model,
