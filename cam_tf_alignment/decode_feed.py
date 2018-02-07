@@ -85,8 +85,12 @@ def decode(config, input_file=None, output=None, max_sentences=0):
     with open(inp) as f_in, open(trg_idx, 'r') as f_trg, open(out, 'w') as f_out:
       for sentence in f_in:
         trg = f_trg.readline()
-        outputs, attns = get_outputs(session, config, model, sentence, trg, buckets)
+        outputs, attns, losses = get_outputs(session, config, model, sentence, trg, buckets)
         logging.info("Output: {}".format(outputs))
+
+        print("\n")
+        print(losses)
+        print("\n\n")
 
         # If there is an EOS symbol in outputs, cut them at that point.
         if data_utils.EOS_ID in outputs:
@@ -145,13 +149,13 @@ def get_outputs(session, config, model, sentence, trg, buckets=None):
     {bucket_id: [(token_ids, trg_ids)]}, bucket_id, config['encoder'])
 
   # Get output logits for the sentence.
-  _, _, output_logits, attns = model.step(session, encoder_inputs, decoder_inputs,
+  _, losses, output_logits, attns = model.step(session, encoder_inputs, decoder_inputs,
                                  target_weights, bucket_id, forward_only="do_decode",
                                  sequence_length=sequence_length, src_mask=src_mask, bow_mask=bow_mask)
 
   # This is a greedy decoder - outputs are just argmaxes of output_logits.
   outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
-  return outputs, attns
+  return outputs, attns, losses
 
 def main(_):
   config = model_utils.process_args(FLAGS, train=False, greedy_decoder=True, special_decode=True)

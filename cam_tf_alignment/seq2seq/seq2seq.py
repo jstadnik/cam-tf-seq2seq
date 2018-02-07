@@ -1201,6 +1201,7 @@ def sequence_loss_by_example(logits, targets, weights,
   with ops.name_scope(name, "sequence_loss_by_example",
                       logits + targets + weights):
     log_perp_list = []
+    log_perp_list_add = []
 #    if entropy:
     for logit, target, weight, attns in zip(logits, targets, weights, attnss):
 
@@ -1213,11 +1214,13 @@ def sequence_loss_by_example(logits, targets, weights,
            logits=logit, labels=target)
       else:
         crossent = softmax_loss_function(logits=logit, labels=target)
-      #crossent+=lamb*sum((att*tf.log(att)/tf.log(2.0)) for att in attns)
-      #crossent+=lamb*sum((att*tf.log(att)) for att in attns)
-      crossent += entropy*nn_ops.softmax_cross_entropy_with_logits(logits=attns, labels=attns)
-      #crossent -= entropy*tf.reduce_sum(attns * tf.log(attns), [2])
+      #addid = entropy*nn_ops.softmax_cross_entropy_with_logits(logits=attns, labels=attns)
+      addid = -entropy*tf.reduce_sum(attns * tf.log(attns), [2])
+      crossent += addid
+
+
       log_perp_list.append(crossent * weight)
+      log_perp_list_add.append(addid * weight)
 #    else:
 #        for logit, target, weight in zip(logits, targets, weights):
 #          if softmax_loss_function is None:
@@ -1231,11 +1234,14 @@ def sequence_loss_by_example(logits, targets, weights,
 #            crossent = softmax_loss_function(logits=logit, labels=target)
 #          log_perp_list.append(crossent * weight)
     log_perps = math_ops.add_n(log_perp_list)
+    log_perps_add = math_ops.add_n(log_perp_list_add)
     if average_across_timesteps:
       total_size = math_ops.add_n(weights)
       total_size += 1e-12  # Just to avoid division by 0 for all-0 weights.
       log_perps /= total_size
-  return log_perps
+      log_perps_add /= total_size
+
+  return log_perps, log_perps_add
 
 
 def sequence_loss(logits, targets, weights,
@@ -1262,16 +1268,18 @@ def sequence_loss(logits, targets, weights,
     ValueError: If len(logits) is different from len(targets) or len(weights).
   """
   with ops.name_scope(name, "sequence_loss", logits + targets + weights):
-    cost = math_ops.reduce_sum(sequence_loss_by_example(
+    cost, addid = sequence_loss_by_example(
         logits, targets, weights,
         average_across_timesteps=average_across_timesteps,
         softmax_loss_function=softmax_loss_function,
-      trg_alignments=trg_alignments, entropy=entropy, attnss=attnss))
+      trg_alignments=trg_alignments, entropy=entropy, attnss=attnss)
+    cost = math_ops.reduce_sum(cost)
+    addid = math_ops.reduce_sum(addid)
     if average_across_batch:
       batch_size = array_ops.shape(targets[0])[0]
-      return cost / math_ops.cast(batch_size, cost.dtype)
+      return cost/math_ops.cast(batch_size, cost.dtype), addid/math_ops.cast(batch_size, addid.dtype)
     else:
-      return cost
+      return cost, addid
 
 
 def model_with_buckets(encoder_inputs, decoder_inputs, targets, weights,

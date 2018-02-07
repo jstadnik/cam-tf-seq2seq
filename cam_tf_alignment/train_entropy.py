@@ -230,11 +230,11 @@ def train(config):
                                    sequence_length, src_mask, bow_mask)
 
       print("\n\n\n")
-      print(step_loss)
+      print("L  " + str(step_loss))
       print("\n\n\n")
 
       step_time += (time.time() - start_time) / config['steps_per_checkpoint']
-      loss += step_loss / config['steps_per_checkpoint']
+      loss += step_loss[0] / config['steps_per_checkpoint']
       current_step += 1
 
       # Once in a while, we save a checkpoint, print statistics, and run evals.

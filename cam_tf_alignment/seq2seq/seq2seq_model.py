@@ -289,7 +289,7 @@ class Seq2SeqModel(object):
         opt = tf.train.AdadeltaOptimizer(rho=rho, epsilon=epsilon)
 
       for b in xrange(len(buckets)):
-        gradients = tf.gradients(self.losses[b], params)
+        gradients = tf.gradients(self.losses[b][0], params)
         clipped_gradients, norm = tf.clip_by_global_norm(gradients,
                                                          max_gradient_norm)
         self.gradient_norms.append(norm)

@@ -129,7 +129,7 @@ def get_batch_ptr(model, train_idx_map, bucket_offset_pairs, current_batch_idx, 
 
   # This is for debugging only: make sure the order is preserved after reloading the model
   global_step = model.global_step.eval()+1
-  logging.info("Global step=%i" % global_step)
+  #logging.info("Global step=%i" % global_step)
   if global_step % 100 == 0:
     logging.info("Global step=%i" % global_step)
   if current_batch_idx+2 < len(bucket_offset_pairs) and (current_step+1) % steps_per_checkpt == 0:
