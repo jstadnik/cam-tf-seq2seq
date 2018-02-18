@@ -216,8 +216,8 @@ class Seq2SeqModel(object):
       self.target_weights.append(tf.placeholder(dtype, shape=[None],
                                                 name="weight{0}".format(i)))
     if train_align is not None and not forward_only:
-      for i in xrange(self.batch_size):
-        self.alignments.append(tf.placeholder(tf.float32, shape=[None],
+      for i in xrange(buckets[-1][1] + 1):
+        self.alignments.append(tf.placeholder(tf.float32, shape=[None, None],
                                               name="align{0}".format(i)))
 
     if use_sequence_length is True:
@@ -338,12 +338,14 @@ class Seq2SeqModel(object):
     alignments = None
 #    print("Enc size={} dec size={}".format(encoder_size, decoder_size))
     if len(encoder_inputs) != encoder_size:
-      if len(encoder_inputs) == encoder_size + self.batch_size:
-        alignments = encoder_inputs[encoder_size:]
-        encoder_inputs = encoder_inputs[:encoder_size]
-      else:
-        raise ValueError("Encoder length must be equal to the one in bucket,"
-                       " %d != %d." % (len(encoder_inputs), encoder_size))
+#      if len(encoder_inputs) == encoder_size + self.batch_size:
+#        alignments = encoder_inputs[encoder_size:]
+#        encoder_inputs = encoder_inputs[:encoder_size]
+#      else:
+#        raise ValueError("Encoder length must be equal to the one in bucket,"
+#                       " %d != %d." % (len(encoder_inputs), encoder_size))
+      alignments = encoder_inputs[encoder_size:]
+      encoder_inputs = encoder_inputs[:encoder_size]
     if len(decoder_inputs) != decoder_size:
       raise ValueError("Decoder length must be equal to the one in bucket,"
                        " %d != %d." % (len(decoder_inputs), decoder_size))
@@ -358,6 +360,11 @@ class Seq2SeqModel(object):
     for l in xrange(decoder_size):
       input_feed[self.decoder_inputs[l].name] = decoder_inputs[l]
       input_feed[self.target_weights[l].name] = target_weights[l]
+    if alignments is not None:
+      logging.debug("Including alignment matrices in input feed")
+      for l in xrange(decoder_size):
+        #print(l)
+        input_feed[self.alignments[l].name] = alignments[l]
 
     if sequence_length is not None:
       logging.debug("Using sequence length for encoder: feed")
@@ -371,10 +378,10 @@ class Seq2SeqModel(object):
       logging.debug("Using bow mask for decoder: feed")
       input_feed[self.bow_mask.name] = bow_mask
 
-    if alignments is not None:
-      logging.debug("Including alignment matrices in input feed")
-      for a in xrange(self.batch_size):
-        input_feed[self.alignments[a].name] = alignments[a]
+#    if alignments is not None:
+#      logging.debug("Including alignment matrices in input feed")
+#      for a in xrange(self.batch_size):
+#        input_feed[self.alignments[a].name] = alignments[a]
 
 
     # Since our targets are decoder inputs shifted by one, we need one more.
@@ -434,7 +441,8 @@ class Seq2SeqModel(object):
 
     encoder_size, decoder_size = self.buckets[bucket_id]
     encoder_inputs, decoder_inputs, alignment_inputs = [], [], []
-
+    #print(encoder_size)
+    #print(decoder_size)
     # Get a random batch of encoder and decoder inputs from data,
     # pad them if needed, reverse encoder inputs and add GO to decoder.
     enc_input_lengths = []
@@ -449,7 +457,16 @@ class Seq2SeqModel(object):
       encoder_input = bucket_inp[0]
       decoder_input = bucket_inp[1]
       if len(bucket_inp) == 3:
-        alignment_inputs.append(bucket_inp[2])
+        alignment_input = bucket_inp[2]
+        alignment_pad = []
+        al_pad1 = [data_utils.PAD_ID] * (encoder_size - len(alignment_input[0]))
+        al_pad2 = [data_utils.PAD_ID] * (encoder_size)
+        for i in xrange(len(alignment_input)):
+            alignment_input[i] = list(alignment_input[i] + al_pad1)
+        for _ in xrange(decoder_size - len(alignment_input)):
+            alignment_pad.append(al_pad2)
+        alignment_inputs.append(alignment_input + alignment_pad)
+
       enc_input_lengths.append(len(encoder_input))
 
       # Encoder inputs are padded and then reversed.
@@ -465,8 +482,21 @@ class Seq2SeqModel(object):
       decoder_inputs.append([data_utils.GO_ID] + decoder_input +
                             [data_utils.PAD_ID] * decoder_pad_size)
 
+    #print("len(encoder_inputs)")
+    #print(len(encoder_inputs))
+    #print("len(encoder_inputs[0])")
+    #print(len(encoder_inputs[0]))
+    #print("len(decoder_inputs)")
+    #print(len(decoder_inputs))
+    #print("len(decoder_inputs[0])")
+    #print(len(decoder_inputs[0]))
+    #print("len(alignment_inputs[0])")
+    #print(len(alignment_inputs[0]))
+    #print("len(alignment_inputs[0][0])")
+    #print(len(alignment_inputs[0][0]))
+
     # Now we create batch-major vectors from the data selected above.
-    batch_encoder_inputs, batch_decoder_inputs, batch_weights_trg = [], [], []
+    batch_encoder_inputs, batch_decoder_inputs, batch_weights_trg, batch_aligns  = [], [], [], []
 
     src_mask = None
     if self.src_mask is not None:
@@ -515,6 +545,10 @@ class Seq2SeqModel(object):
       batch_decoder_inputs.append(
           np.array([decoder_inputs[batch_idx][length_idx]
                     for batch_idx in xrange(self.batch_size)], dtype=np.int32))
+      batch_aligns.append(
+          np.array([alignment_inputs[batch_idx][length_idx]
+                    for batch_idx in xrange(self.batch_size)], dtype=np.float32))
+
 
     # Make sequence length vector
     sequence_length = None
@@ -522,11 +556,18 @@ class Seq2SeqModel(object):
       sequence_length = np.array([enc_input_lengths[batch_idx]
                                 for batch_idx in xrange(self.batch_size)], dtype=np.int32)
 
+    print(len(batch_decoder_inputs))
+    print(len(batch_decoder_inputs[0]))
+    print(len(batch_encoder_inputs))
+    print(len(batch_encoder_inputs[0]))
+    print(len(batch_aligns))
+    print(len(batch_aligns[0]))
     for batch_idx in xrange(self.batch_size):
       logging.debug("encoder input={}".format(encoder_inputs[batch_idx]))
     logging.debug("Sequence length={}".format(sequence_length))
     logging.debug("Source mask={}".format(src_mask))
     if self.bow_mask is not None:
       logging.debug("BOW mask={} (sum={})".format(bow_mask, np.sum(bow_mask)))
-    batch_encoder_inputs.extend(alignment_inputs)
+    batch_encoder_inputs.extend(batch_aligns)
+
     return batch_encoder_inputs, batch_decoder_inputs, batch_weights_trg, sequence_length, src_mask, bow_mask

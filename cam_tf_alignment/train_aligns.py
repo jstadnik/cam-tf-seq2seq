@@ -100,7 +100,7 @@ tf.app.flags.DEFINE_string("new_model_path", None, "Path to trained model with r
 tf.app.flags.DEFINE_string("filetype", "ckpt", "File type of saved model, will be set to 'npz' internally if save_npz=true")
 tf.app.flags.DEFINE_boolean("save_npz", False, "Save model in npz format")
 
-tf.app.flags.DEFINE_string("train_align", None, "File containing sparse target alignment matrices, defined by rows of triples 'i j val'")
+tf.app.flags.DEFINE_string("train_align", None, "Pickle file containing reference alignment probabilities")
 tf.app.flags.DEFINE_string("align_val_delimit", ',', "Alignment val delimiter")
 tf.app.flags.DEFINE_string("align_triple_delimit", ';', "Alignment triple delimiter")
 tf.app.flags.DEFINE_float("entropy", 0.0, "Add reducing entropy as criteria")
@@ -151,12 +151,13 @@ def train(config):
 
     if config['train_align'] is not None:
       align_delimits = (config['align_val_delimit'], config['align_triple_delimit'])
-      with tf.gfile.GFile(config['train_align'], mode="r") as f_align:
+      with tf.gfile.GFile(config['train_align'], mode="rb") as f_align:
         data_args.update(align_file=f_align, align_delimits=align_delimits)
         train_set = data_utils.read_data(**data_args)
         data_args.update(align_file=None, align_delimits=None)
     else:
       train_set = data_utils.read_data(**data_args)
+    #print(train_set[0][0])
     data_args.update(source_path=src_dev, target_path=trg_dev, max_size=None)
     dev_set = data_utils.read_data(**data_args)
     tmpfile = config['train_dir']+"/tmp_idx.pkl"
@@ -230,11 +231,11 @@ def train(config):
                                    sequence_length, src_mask, bow_mask)
 
       print("\n\n\n")
-      print(step_loss)
+      print("L  " + str(step_loss))
       print("\n\n\n")
 
       step_time += (time.time() - start_time) / config['steps_per_checkpoint']
-      loss += step_loss / config['steps_per_checkpoint']
+      loss += step_loss[0] / config['steps_per_checkpoint']
       current_step += 1
 
       # Once in a while, we save a checkpoint, print statistics, and run evals.

@@ -1202,37 +1202,47 @@ def sequence_loss_by_example(logits, targets, weights,
                       logits + targets + weights):
     log_perp_list = []
     log_perp_list_add = []
-#    if entropy:
-    for logit, target, weight, attns in zip(logits, targets, weights, attnss):
+    if trg_alignments are not None:
+      for logit, target, weight, attns, align in zip(logits, targets, weights, attnss, trg_alignments):
 
-      if softmax_loss_function is None:
+        if softmax_loss_function is None:
         # TODO(irving,ebrevdo): This reshape is needed because
         # sequence_loss_by_example is called with scalars sometimes, which
         # violates our general scalar strictness policy.
-        target = array_ops.reshape(target, [-1])
-        crossent = nn_ops.sparse_softmax_cross_entropy_with_logits(
-           logits=logit, labels=target)
-      else:
-        crossent = softmax_loss_function(logits=logit, labels=target)
+          target = array_ops.reshape(target, [-1])
+          crossent = nn_ops.sparse_softmax_cross_entropy_with_logits(
+             logits=logit, labels=target)
+        else:
+          crossent = softmax_loss_function(logits=logit, labels=target)
       #addid = entropy*nn_ops.softmax_cross_entropy_with_logits(logits=attns, labels=attns)
-      addid = -entropy*tf.reduce_sum(attns * tf.log(attns), [2])
-      crossent += addid
+      #addid = -entropy*tf.reduce_sum(attns * tf.log(attns), [2])
+        addid = 0.01*tf.reduce_sum((attns-align)**2, [2])
+        crossent += addid
 
 
-      log_perp_list.append(crossent * weight)
-      log_perp_list_add.append(addid * weight)
-#    else:
-#        for logit, target, weight in zip(logits, targets, weights):
-#          if softmax_loss_function is None:
-#            # TODO(irving,ebrevdo): This reshape is needed because
-#            # sequence_loss_by_example is called with scalars sometimes, which
-#            # violates our general scalar strictness policy.
-#            target = array_ops.reshape(target, [-1])
-#            crossent = nn_ops.sparse_softmax_cross_entropy_with_logits(
-#               logits=logit, labels=target)
-#          else:
-#            crossent = softmax_loss_function(logits=logit, labels=target)
-#          log_perp_list.append(crossent * weight)
+        log_perp_list.append(crossent * weight)
+        log_perp_list_add.append(addid * weight)
+    else
+      for logit, target, weight, attns in zip(logits, targets, weights, attnss):
+
+        if softmax_loss_function is None:
+        # TODO(irving,ebrevdo): This reshape is needed because
+        # sequence_loss_by_example is called with scalars sometimes, which
+        # violates our general scalar strictness policy.
+          target = array_ops.reshape(target, [-1])
+          crossent = nn_ops.sparse_softmax_cross_entropy_with_logits(
+             logits=logit, labels=target)
+        else:
+          crossent = softmax_loss_function(logits=logit, labels=target)
+      #addid = entropy*nn_ops.softmax_cross_entropy_with_logits(logits=attns, labels=attns)
+        addid = -entropy*tf.reduce_sum(attns * tf.log(attns), [2])
+        #addid = 0.01*tf.reduce_sum((attns-align)**2, [2])
+        crossent += addid
+
+
+        log_perp_list.append(crossent * weight)
+        log_perp_list_add.append(addid * weight)
+
     log_perps = math_ops.add_n(log_perp_list)
     log_perps_add = math_ops.add_n(log_perp_list_add)
     if average_across_timesteps:
@@ -1341,8 +1351,14 @@ def model_with_buckets(encoder_inputs, decoder_inputs, targets, weights,
                                     decoder_inputs[:bucket[1]],
                                     bucket[0])
 
+        #print(bucket)
         outputs.append(bucket_outputs)
         attnsss.append(attnss)
+        #print(attnss)
+        #print("\n\n")
+        #print("\n\n")
+        #print(alignments)
+        #print("\n\n")
         if per_example_loss:
           losses.append(sequence_loss_by_example(
               outputs[-1], targets[:bucket[1]], weights[:bucket[1]],
@@ -1352,6 +1368,6 @@ def model_with_buckets(encoder_inputs, decoder_inputs, targets, weights,
           losses.append(sequence_loss(
               outputs[-1], targets[:bucket[1]], weights[:bucket[1]],
               softmax_loss_function=softmax_loss_function,
-            trg_alignments=alignments, entropy=entropy, attnss=attnss))
+              trg_alignments=alignments[:bucket[1]], entropy=entropy, attnss=attnss))
 
   return outputs, losses, attnsss

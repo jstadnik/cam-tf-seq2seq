@@ -22,6 +22,7 @@ import gzip
 import os
 import re
 import tarfile
+import pickle
 
 from six.moves import urllib
 
@@ -296,7 +297,7 @@ def get_training_data(config):
       config['dev_src_idx'] != None and config['dev_trg_idx'] != None:
         logging.info("Get indexed training and dev data")
         src_train, trg_train, src_dev, trg_dev = config['train_src_idx'], config['train_trg_idx'], \
-                                                 config['dev_src_idx'], config['dev_trg_idx'] 
+                                                 config['dev_src_idx'], config['dev_trg_idx']
     elif config['train_src'] != None and config['train_trg'] != None and \
       config['dev_src'] != None and config['dev_trg'] != None:
         logging.info("Index tokenized training and dev data and write to dir=%s" % config['data_dir'])
@@ -381,7 +382,6 @@ def read_data(buckets, source_path, target_path, max_size=None, src_vcb_size=Non
     logging.info("Replace OOV words with id={} for src_vocab_size={}".format(UNK_ID, src_vcb_size))
   if trg_vcb_size:
     logging.info("Replace OOV words with id={} for trg_vocab_size={}".format(UNK_ID, trg_vcb_size))
-
   data_set = [[] for _ in buckets]
   with tf.gfile.GFile(source_path, mode="r") as source_file:
     with tf.gfile.GFile(target_path, mode="r") as target_file:
@@ -405,21 +405,21 @@ def read_data(buckets, source_path, target_path, max_size=None, src_vcb_size=Non
         if trg_vcb_size:
           # Replace target OOV words with unk (in case this has not been done on the target side)
           target_ids = [ wid if wid < trg_vcb_size else UNK_ID for wid in target_ids ]
-        alignment = None
+        align_line = None
         if align_file is not None:
-          align_line = align_file.readline()
-          val_delimit, triple_delimit = align_delimits
-          alignment = []
-          for triple in align_line.split(triple_delimit):
-            for val in triple.strip().split(val_delimit):
-              alignment.append(float(val.strip()))
+          align_line = pickle.load(align_file)
+          #val_delimit, triple_delimit = align_delimits
+          #alignment = []
+          #for triple in align_line.split(triple_delimit):
+          #  for val in triple.strip().split(val_delimit):
+          #    alignment.append(float(val.strip()))
 
         for bucket_id, (source_size, target_size) in enumerate(buckets):
           # Target will get additional GO symbol
           if len(source_ids) <= source_size and len(target_ids) < target_size:
             data_set[bucket_id].append([source_ids, target_ids])
-            if alignment:
-              data_set[bucket_id][-1].append(alignment)
+            if align_line is not None:
+              data_set[bucket_id][-1].append(align_line.tolist())
             break # skips training example if it fits in no bucket
         source, target = source_file.readline(), target_file.readline()
   return data_set
