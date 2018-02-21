@@ -1202,9 +1202,9 @@ def sequence_loss_by_example(logits, targets, weights,
                       logits + targets + weights):
     log_perp_list = []
     log_perp_list_add = []
-    if trg_alignments are not None:
-      for logit, target, weight, attns, align in zip(logits, targets, weights, attnss, trg_alignments):
 
+    if trg_alignments is not None:
+      for logit, target, weight, attns, align in zip(logits, targets, weights, attnss, trg_alignments):
         if softmax_loss_function is None:
         # TODO(irving,ebrevdo): This reshape is needed because
         # sequence_loss_by_example is called with scalars sometimes, which
@@ -1214,17 +1214,14 @@ def sequence_loss_by_example(logits, targets, weights,
              logits=logit, labels=target)
         else:
           crossent = softmax_loss_function(logits=logit, labels=target)
-      #addid = entropy*nn_ops.softmax_cross_entropy_with_logits(logits=attns, labels=attns)
-      #addid = -entropy*tf.reduce_sum(attns * tf.log(attns), [2])
+        #addid = entropy*nn_ops.softmax_cross_entropy_with_logits(logits=attns, labels=attns)
+        #addid = -entropy*tf.reduce_sum(attns * tf.log(attns), [2])
         addid = 0.01*tf.reduce_sum((attns-align)**2, [2])
         crossent += addid
-
-
         log_perp_list.append(crossent * weight)
         log_perp_list_add.append(addid * weight)
-    else
+    else:
       for logit, target, weight, attns in zip(logits, targets, weights, attnss):
-
         if softmax_loss_function is None:
         # TODO(irving,ebrevdo): This reshape is needed because
         # sequence_loss_by_example is called with scalars sometimes, which
@@ -1234,12 +1231,9 @@ def sequence_loss_by_example(logits, targets, weights,
              logits=logit, labels=target)
         else:
           crossent = softmax_loss_function(logits=logit, labels=target)
-      #addid = entropy*nn_ops.softmax_cross_entropy_with_logits(logits=attns, labels=attns)
+        #addid = entropy*nn_ops.softmax_cross_entropy_with_logits(logits=attns, labels=attns)
         addid = -entropy*tf.reduce_sum(attns * tf.log(attns), [2])
-        #addid = 0.01*tf.reduce_sum((attns-align)**2, [2])
         crossent += addid
-
-
         log_perp_list.append(crossent * weight)
         log_perp_list_add.append(addid * weight)
 
@@ -1282,7 +1276,7 @@ def sequence_loss(logits, targets, weights,
         logits, targets, weights,
         average_across_timesteps=average_across_timesteps,
         softmax_loss_function=softmax_loss_function,
-      trg_alignments=trg_alignments, entropy=entropy, attnss=attnss)
+        trg_alignments=trg_alignments, entropy=entropy, attnss=attnss)
     cost = math_ops.reduce_sum(cost)
     addid = math_ops.reduce_sum(addid)
     if average_across_batch:
@@ -1359,15 +1353,19 @@ def model_with_buckets(encoder_inputs, decoder_inputs, targets, weights,
         #print("\n\n")
         #print(alignments)
         #print("\n\n")
-        if per_example_loss:
-          losses.append(sequence_loss_by_example(
-              outputs[-1], targets[:bucket[1]], weights[:bucket[1]],
-              softmax_loss_function=softmax_loss_function,
-            trg_alignments=alignments, entropy=entropy, attnss=attnss))
-        else:
+        if alignments is not None and len(alignments)>1:
           losses.append(sequence_loss(
               outputs[-1], targets[:bucket[1]], weights[:bucket[1]],
               softmax_loss_function=softmax_loss_function,
               trg_alignments=alignments[:bucket[1]], entropy=entropy, attnss=attnss))
+        elif per_example_loss:
+          losses.append(sequence_loss_by_example(
+              outputs[-1], targets[:bucket[1]], weights[:bucket[1]],
+              softmax_loss_function=softmax_loss_function,
+              trg_alignments=None, entropy=entropy, attnss=attnss))
+        else:
+          losses.append(sequence_loss(
+              outputs[-1], targets[:bucket[1]], weights[:bucket[1]],
+              softmax_loss_function=softmax_loss_function, entropy=entropy, attnss=attnss))
 
   return outputs, losses, attnsss

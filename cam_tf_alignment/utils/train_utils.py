@@ -228,10 +228,10 @@ def run_eval(config, session, model, dev_set, current_eval_ppxs):
   else:
     return eval_ppxs
 
-def decode_dev(config, model, current_bleu):
+def decode_dev(config, model, current_bleu, eval_no = 0):
   # Greedily decode dev set
   inp = config['dev_src_idx']
-  out = os.path.join(config['train_dir'], "dev.out")
+  out = os.path.join(config['train_dir'], "dev.out" + str(eval_no))
   ref = config['dev_trg_idx']
   g2 = tf.Graph() # use a separate graph to avoid variable collision when loading model for decoding
   with g2.as_default() as g:
@@ -251,6 +251,32 @@ def decode_dev(config, model, current_bleu):
   else:
     logging.info("Model %s does not achieve higher BLEU, not updating %s" % (current_model, dev_bleu_model))
     return current_bleu
+
+def decode_dev_feed(config, model, eval_no = 0):
+  # Greedily decode dev set
+  inp = config['dev_src_idx']
+  out = os.path.join(config['train_dir'], "dev.out.feed")
+  atts_out = os.path.join(config['train_dir'], "dev.atts.out" + str(eval_no))
+  ref = config['dev_trg_idx']
+  g2 = tf.Graph() # use a separate graph to avoid variable collision when loading model for decoding
+  with g2.as_default() as g:
+    from cam_tf_alignment.decode_feed import decode
+    decode(config, input_file=inp, output=out, atts_out=atts_out, trg_idx=ref,
+            max_sentences=config['eval_bleu_size'])
+  #bleu = eval_set(out, ref)
+
+  # If the current model improves over the results of the previous dev eval, overwrite the dev_bleu model
+  #current_model = make_model_path(config, str(model.global_step.eval()))
+  #dev_bleu_model = make_model_path(config, "dev_bleu")
+  #if bleu > current_bleu:
+  #  current_bleu = bleu
+  #  shutil.copy(current_model, dev_bleu_model)
+  #  shutil.copy(current_model+".meta", dev_bleu_model+".meta")
+  #  logging.info("Model %s achieves new best BLEU=%.2f, updating %s" % (current_model, bleu, dev_bleu_model))
+  #  return bleu
+  #else:
+  #  logging.info("Model %s does not achieve higher BLEU, not updating %s" % (current_model, dev_bleu_model))
+  #  return current_bleu
 
 def make_model_path(config, affix):
   return os.path.join(config['train_dir'], "train.ckpt-"+affix)

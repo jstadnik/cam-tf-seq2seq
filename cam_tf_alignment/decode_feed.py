@@ -24,18 +24,18 @@ from cam_tf_alignment.utils import data_utils, model_utils
 tf.app.flags.DEFINE_string("test_src_idx", "/tmp/in.txt", "An integer-encoded input file")
 tf.app.flags.DEFINE_string("test_out_idx", "/tmp/out.txt", "Output file for decoder output")
 tf.app.flags.DEFINE_string("atts_out", None, "Output file for attentions")
-tf.app.flags.DEFINE_string("trg_idx", None, "Output file for attentions")
+tf.app.flags.DEFINE_string("trg_idx", None, "Decoder input file")
 tf.app.flags.DEFINE_integer("max_sentences", 0, "The maximum number of sentences to translate (all if set to 0)")
 tf.app.flags.DEFINE_boolean("interactive", False, "Decode from command line")
-tf.app.flags.DEFINE_boolean("entropy", False, "Add reducing entropy as criteria")
+#tf.app.flags.DEFINE_boolean("entropy", False, "Add reducing entropy as criteria")
 FLAGS = tf.app.flags.FLAGS
 
-def decode(config, input_file=None, output=None, max_sentences=0):
+def decode(config, input_file=None, output=None, atts_out=None, trg_idx=None, max_sentences=0):
   if input_file and output:
     inp = input_file
     out = output
-    out_atts = None
-    trg_idx = None
+    out_atts = atts_out
+    trg_idx = trg_idx
   else:
     inp = config['test_src_idx']
     out = config['test_out_idx']
@@ -61,7 +61,10 @@ def decode(config, input_file=None, output=None, max_sentences=0):
         max_output_length = len(trg_ids)
   bucket = model_utils.make_bucket(max([max_input_length, max_output_length]), greedy_decoder=True)
   buckets = list(model_utils._buckets)
-  buckets.append(bucket)
+  if bucket[0] >= buckets[-1][0]:
+      buckets.append(bucket)
+  else:
+      buckets = buckets[:-1] + [bucket] + buckets[-1:]
   logging.info("Add new bucket={}".format(bucket))
 
   with tf.Session() as session:

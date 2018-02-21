@@ -210,7 +210,7 @@ class Seq2SeqModel(object):
     for i in xrange(buckets[-1][0]):  # Last bucket is the biggest one.
       self.encoder_inputs.append(tf.placeholder(tf.int32, shape=[None],
                                                 name="encoder{0}".format(i)))
-    for i in xrange(buckets[-1][1] + 1):
+    for i in xrange(max(thing[1] for thing in buckets) + 1):
       self.decoder_inputs.append(tf.placeholder(tf.int32, shape=[None],
                                                 name="decoder{0}".format(i)))
       self.target_weights.append(tf.placeholder(dtype, shape=[None],
@@ -356,7 +356,10 @@ class Seq2SeqModel(object):
     # Input feed: encoder inputs, decoder inputs, target_weights, as provided.
     input_feed = {}
     for l in xrange(encoder_size):
-      input_feed[self.encoder_inputs[l].name] = encoder_inputs[l]
+      #input_feed[self.encoder_inputs[l].name] = encoder_inputs[l]
+      print(l)
+      urgh = encoder_inputs[l]
+      input_feed[self.encoder_inputs[l].name] = urgh
     for l in xrange(decoder_size):
       input_feed[self.decoder_inputs[l].name] = decoder_inputs[l]
       input_feed[self.target_weights[l].name] = target_weights[l]
@@ -545,8 +548,9 @@ class Seq2SeqModel(object):
       batch_decoder_inputs.append(
           np.array([decoder_inputs[batch_idx][length_idx]
                     for batch_idx in xrange(self.batch_size)], dtype=np.int32))
-      batch_aligns.append(
-          np.array([alignment_inputs[batch_idx][length_idx]
+
+      if len(bucket_inp) == 3:
+        batch_aligns.append(np.array([alignment_inputs[batch_idx][length_idx]
                     for batch_idx in xrange(self.batch_size)], dtype=np.float32))
 
 
@@ -556,12 +560,12 @@ class Seq2SeqModel(object):
       sequence_length = np.array([enc_input_lengths[batch_idx]
                                 for batch_idx in xrange(self.batch_size)], dtype=np.int32)
 
-    print(len(batch_decoder_inputs))
-    print(len(batch_decoder_inputs[0]))
-    print(len(batch_encoder_inputs))
-    print(len(batch_encoder_inputs[0]))
-    print(len(batch_aligns))
-    print(len(batch_aligns[0]))
+    #print(len(batch_decoder_inputs))
+    #print(len(batch_decoder_inputs[0]))
+    #print(len(batch_encoder_inputs))
+    #print(len(batch_encoder_inputs[0]))
+    #print(len(batch_aligns))
+    #print(len(batch_aligns[0]))
     for batch_idx in xrange(self.batch_size):
       logging.debug("encoder input={}".format(encoder_inputs[batch_idx]))
     logging.debug("Sequence length={}".format(sequence_length))
