@@ -267,8 +267,8 @@ def train(config):
         if current_step % (config['steps_per_checkpoint'] * config['eval_frequency']) == 0:
           if config['eval_bleu']:
             if model.global_step.eval() >= config['eval_bleu_start']:
-              train_utils.decode_dev_feed(config, model, eval_no)
               current_bleu = train_utils.decode_dev(config, model, current_bleu, eval_no)
+              idek = train_utils.decode_dev_feed(config, model, eval_no)
               eval_no += 1
             else:
               logging.info("Waiting until global step %i for BLEU evaluation on dev" % config['eval_bleu_start'])
