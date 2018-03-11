@@ -1216,8 +1216,8 @@ def sequence_loss_by_example(logits, targets, weights,
           crossent = softmax_loss_function(logits=logit, labels=target)
         #addid = entropy*nn_ops.softmax_cross_entropy_with_logits(logits=attns, labels=attns)
         #addid = -entropy*tf.reduce_sum(attns * tf.log(attns), [2])
-        addid = 0.01*tf.reduce_sum((attns-align)**2, [2])
-        crossent += addid
+        addid = tf.reduce_sum((attns-align)**2, [2])
+        crossent += entropy*addid
         log_perp_list.append(crossent * weight)
         log_perp_list_add.append(addid * weight)
     else:
@@ -1232,8 +1232,8 @@ def sequence_loss_by_example(logits, targets, weights,
         else:
           crossent = softmax_loss_function(logits=logit, labels=target)
         #addid = entropy*nn_ops.softmax_cross_entropy_with_logits(logits=attns, labels=attns)
-        addid = -entropy*tf.reduce_sum(attns * tf.log(attns), [2])
-        crossent += addid
+        addid = -tf.reduce_sum(attns * tf.log(attns), [2])
+        crossent += entropy*addid
         log_perp_list.append(crossent * weight)
         log_perp_list_add.append(addid * weight)
 
