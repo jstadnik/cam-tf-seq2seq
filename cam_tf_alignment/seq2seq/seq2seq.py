@@ -1216,7 +1216,14 @@ def sequence_loss_by_example(logits, targets, weights,
           crossent = softmax_loss_function(logits=logit, labels=target)
         #addid = entropy*nn_ops.softmax_cross_entropy_with_logits(logits=attns, labels=attns)
         #addid = -entropy*tf.reduce_sum(attns * tf.log(attns), [2])
-        addid = tf.reduce_sum((attns-align)**2, [2])
+        #print(attns)
+        #print(align)
+        align = [align]
+        #addid = -tf.reduce_sum(tf.log(attns), [2])
+        addid = tf.reduce_sum(align, [2])
+        #print("whatever")
+        #addid = tf.nn.softmax_cross_entropy_with_logits(logits=attns, labels=align)
+        #addid = addid[0]
         crossent += entropy*addid
         log_perp_list.append(crossent * weight)
         log_perp_list_add.append(addid * weight)

@@ -87,9 +87,10 @@ def decode(config, input_file=None, output=None, atts_out=None, trg_idx=None, ma
         outputs, attns, losses = get_outputs(session, config, model, sentence, trg, buckets)
         logging.info("Output: {}".format(outputs))
 
-        print("\n")
-        print(losses)
-        print("\n\n")
+#        print("\n")
+#        print("wellfuck")
+#        print(losses)
+#        print("\n\n")
 
         # If there is an EOS symbol in outputs, cut them at that point.
         if data_utils.EOS_ID in outputs:

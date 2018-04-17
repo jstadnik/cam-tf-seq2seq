@@ -357,7 +357,7 @@ class Seq2SeqModel(object):
     input_feed = {}
     for l in xrange(encoder_size):
       #input_feed[self.encoder_inputs[l].name] = encoder_inputs[l]
-      print(l)
+      #print(l)
       urgh = encoder_inputs[l]
       input_feed[self.encoder_inputs[l].name] = urgh
     for l in xrange(decoder_size):
@@ -462,8 +462,9 @@ class Seq2SeqModel(object):
       if len(bucket_inp) == 3:
         alignment_input = bucket_inp[2]
         alignment_pad = []
+        print(data_utils.PAD_ID)
         al_pad1 = [data_utils.PAD_ID] * (encoder_size - len(alignment_input[0]))
-        al_pad2 = [data_utils.PAD_ID] * (encoder_size)
+        al_pad2 = [1.0/encoder_size] * (encoder_size)
         for i in xrange(len(alignment_input)):
             alignment_input[i] = list(alignment_input[i] + al_pad1)
         for _ in xrange(decoder_size - len(alignment_input)):

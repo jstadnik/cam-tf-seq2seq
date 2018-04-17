@@ -54,7 +54,7 @@ def no_pad_symbol():
   global PAD_ID
   global UNK_ID
   UNK_ID = 0
-  PAD_ID = -1
+  PAD_ID = 0
 
 def maybe_download(directory, filename, url):
   """Download filename from url unless it's already in directory."""
