@@ -260,7 +260,7 @@ def decode_dev_feed(config, model, eval_no = 0):
   ref = config['dev_trg_idx']
   g2 = tf.Graph() # use a separate graph to avoid variable collision when loading model for decoding
   with g2.as_default() as g:
-    from cam_tf_alignment.decode_feed_fuckyou import decode
+    from cam_tf_alignment.decode_feed_additional import decode
     decode(config, input_file=inp, output=out, atts_out=atts_out, trg_idx=ref,
             max_sentences=config['eval_bleu_size'])
   #bleu = eval_set(out, ref)

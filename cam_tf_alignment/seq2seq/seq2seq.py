@@ -1176,7 +1176,7 @@ def one2many_rnn_seq2seq(encoder_inputs,
 def sequence_loss_by_example(logits, targets, weights,
                              average_across_timesteps=True,
                              softmax_loss_function=None, name=None,
-                             trg_alignments=None, entropy=0.0, attnss=None):
+                             trg_alignments=None, lamb=0.0, attnss=None):
   """Weighted cross-entropy loss for a sequence of logits (per example).
 
   Args:
@@ -1214,17 +1214,9 @@ def sequence_loss_by_example(logits, targets, weights,
              logits=logit, labels=target)
         else:
           crossent = softmax_loss_function(logits=logit, labels=target)
-        #addid = entropy*nn_ops.softmax_cross_entropy_with_logits(logits=attns, labels=attns)
-        #addid = -entropy*tf.reduce_sum(attns * tf.log(attns), [2])
-        #print(attns)
-        #print(align)
-        align = [align]
-        #addid = -tf.reduce_sum(tf.log(attns), [2])
-        addid = tf.reduce_sum(align, [2])
-        #print("whatever")
-        #addid = tf.nn.softmax_cross_entropy_with_logits(logits=attns, labels=align)
-        #addid = addid[0]
-        crossent += entropy*addid
+        #addid = -tf.reduce_sum(align * tf.log(attns), [2]) #xent
+        addid = tf.reduce_sum((align-attns)**2, [2]) #MSE
+        crossent += lamb*addid
         log_perp_list.append(crossent * weight)
         log_perp_list_add.append(addid * weight)
     else:
@@ -1238,9 +1230,8 @@ def sequence_loss_by_example(logits, targets, weights,
              logits=logit, labels=target)
         else:
           crossent = softmax_loss_function(logits=logit, labels=target)
-        #addid = entropy*nn_ops.softmax_cross_entropy_with_logits(logits=attns, labels=attns)
         addid = -tf.reduce_sum(attns * tf.log(attns), [2])
-        crossent += entropy*addid
+        crossent += lamb*addid
         log_perp_list.append(crossent * weight)
         log_perp_list_add.append(addid * weight)
 
@@ -1258,7 +1249,7 @@ def sequence_loss_by_example(logits, targets, weights,
 def sequence_loss(logits, targets, weights,
                   average_across_timesteps=True, average_across_batch=True,
                   softmax_loss_function=None, name=None,
-                  trg_alignments=None, entropy=0.0, attnss=None):
+                  trg_alignments=None, lamb=0.0, attnss=None):
   """Weighted cross-entropy loss for a sequence of logits, batch-collapsed.
 
   Args:
@@ -1283,7 +1274,7 @@ def sequence_loss(logits, targets, weights,
         logits, targets, weights,
         average_across_timesteps=average_across_timesteps,
         softmax_loss_function=softmax_loss_function,
-        trg_alignments=trg_alignments, entropy=entropy, attnss=attnss)
+        trg_alignments=trg_alignments, lamb=lamb, attnss=attnss)
     cost = math_ops.reduce_sum(cost)
     addid = math_ops.reduce_sum(addid)
     if average_across_batch:
@@ -1295,7 +1286,7 @@ def sequence_loss(logits, targets, weights,
 
 def model_with_buckets(encoder_inputs, decoder_inputs, targets, weights,
                        buckets, seq2seq, softmax_loss_function=None,
-                       per_example_loss=False, name=None, alignments=None, entropy=0.0):
+                       per_example_loss=False, name=None, alignments=None, lamb=0.0):
   """Create a sequence-to-sequence model with support for bucketing.
 
   The seq2seq argument is a function that defines a sequence-to-sequence model,
@@ -1352,27 +1343,21 @@ def model_with_buckets(encoder_inputs, decoder_inputs, targets, weights,
                                     decoder_inputs[:bucket[1]],
                                     bucket[0])
 
-        #print(bucket)
         outputs.append(bucket_outputs)
         attnsss.append(attnss)
-        #print(attnss)
-        #print("\n\n")
-        #print("\n\n")
-        #print(alignments)
-        #print("\n\n")
         if alignments is not None and len(alignments)>1:
           losses.append(sequence_loss(
               outputs[-1], targets[:bucket[1]], weights[:bucket[1]],
               softmax_loss_function=softmax_loss_function,
-              trg_alignments=alignments[:bucket[1]], entropy=entropy, attnss=attnss))
+              trg_alignments=alignments[:bucket[1]], lamb=lamb, attnss=attnss))
         elif per_example_loss:
           losses.append(sequence_loss_by_example(
               outputs[-1], targets[:bucket[1]], weights[:bucket[1]],
               softmax_loss_function=softmax_loss_function,
-              trg_alignments=None, entropy=entropy, attnss=attnss))
+              trg_alignments=None, lamb=lamb, attnss=attnss))
         else:
           losses.append(sequence_loss(
               outputs[-1], targets[:bucket[1]], weights[:bucket[1]],
-              softmax_loss_function=softmax_loss_function, entropy=entropy, attnss=attnss))
+              softmax_loss_function=softmax_loss_function, lamb=lamb, attnss=attnss))
 
   return outputs, losses, attnsss

@@ -77,7 +77,7 @@ class Seq2SeqModel(object):
                initializer=None,
                legacy=False,
                train_align=None,
-               entropy=0.0):
+               lamb=0.0):
     """Create the model.
 
     Args:
@@ -267,7 +267,7 @@ class Seq2SeqModel(object):
           self.target_weights, buckets,
           lambda x, y, z: seq2seq_f(x, y, False, z),
           softmax_loss_function=softmax_loss_function,
-          alignments=self.alignments, entropy=entropy)
+          alignments=self.alignments, lamb=lamb)
 
     # Gradients and SGD update operation for training the model.
     params = tf.trainable_variables()

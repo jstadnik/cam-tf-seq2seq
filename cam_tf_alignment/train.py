@@ -76,7 +76,7 @@ tf.app.flags.DEFINE_boolean("maxout_layer", False, "If > 0, use a maxout layer o
 tf.app.flags.DEFINE_string("encoder", "reverse", "Select encoder from 'reverse', 'bidirectional', 'bow'. The 'reverse' encoder is unidirectional and reverses the input "
                             "(default for tensorflow), the bidirectional encoder creates both forward and backward states and "
                             "concatenates them (like the Bahdanau model)")
-tf.app.flags.DEFINE_boolean("init_backward", False, "When using the bidirectional encoder, initialise the hidden decoder state from the backward encoder state (default: forward).")                            
+tf.app.flags.DEFINE_boolean("init_backward", False, "When using the bidirectional encoder, initialise the hidden decoder state from the backward encoder state (default: forward).")
 tf.app.flags.DEFINE_boolean("legacy", False, "Read legacy models with slightly different variable scopes")
 
 # Extra model configuration for BOW model
@@ -100,16 +100,24 @@ tf.app.flags.DEFINE_string("new_model_path", None, "Path to trained model with r
 tf.app.flags.DEFINE_string("filetype", "ckpt", "File type of saved model, will be set to 'npz' internally if save_npz=true")
 tf.app.flags.DEFINE_boolean("save_npz", False, "Save model in npz format")
 
-tf.app.flags.DEFINE_string("train_align", None, "File containing sparse target alignment matrices, defined by rows of triples 'i j val'")
+tf.app.flags.DEFINE_string("train_align", None, "Pickle file containing reference alignment probabilities")
 tf.app.flags.DEFINE_string("align_val_delimit", ',', "Alignment val delimiter")
 tf.app.flags.DEFINE_string("align_triple_delimit", ';', "Alignment triple delimiter")
+tf.app.flags.DEFINE_float("lamb", 0.0, "Scaling factor for alignment loss term")
 
 FLAGS = tf.app.flags.FLAGS
 
+
+from tensorflow.python import debug as tf_debug
+
+
 def train(config):
   logging.info("Train BOW model") if (config['encoder'] == "bow" and config['src_lang'] == config['trg_lang']) \
-    else logging.info("Train NMT model")  
-  
+    else logging.info("Train NMT model")
+
+  # For the AER
+  eval_no = 0
+
   # Get training data.
   src_train, trg_train, src_dev, trg_dev = data_utils.get_training_data(config)
 
@@ -122,6 +130,11 @@ def train(config):
   logging.info("Use device %s" % device)
 
   with tf.Session(config=tf.ConfigProto(allow_soft_placement=allow_soft_placement, log_device_placement=log_device_placement)) as session, tf.device(device):
+
+
+      #session = tf_debug.LocalCLIDebugWrapperSession(session)
+
+
     # Create model
     if config['fixed_random_seed']:
       tf.set_random_seed(1234)
@@ -138,15 +151,16 @@ def train(config):
     data_args = dict(buckets=model_utils._buckets, source_path=src_train, target_path=trg_train,
                      max_size=config['max_train_data_size'], src_vcb_size=config['src_vocab_size'],
                      trg_vcb_size=config['trg_vocab_size'], add_src_eos=config['add_src_eos'])
-  
+
     if config['train_align'] is not None:
       align_delimits = (config['align_val_delimit'], config['align_triple_delimit'])
-      with tf.gfile.GFile(config['train_align'], mode="r") as f_align:
+      with tf.gfile.GFile(config['train_align'], mode="rb") as f_align:
         data_args.update(align_file=f_align, align_delimits=align_delimits)
         train_set = data_utils.read_data(**data_args)
         data_args.update(align_file=None, align_delimits=None)
     else:
       train_set = data_utils.read_data(**data_args)
+    #print(train_set[0][0])
     data_args.update(source_path=src_dev, target_path=trg_dev, max_size=None)
     dev_set = data_utils.read_data(**data_args)
     tmpfile = config['train_dir']+"/tmp_idx.pkl"
@@ -219,8 +233,12 @@ def train(config):
                                    target_weights, bucket_id, False,
                                    sequence_length, src_mask, bow_mask)
 
+      print("\n\n\n")
+      print("L  " + str(step_loss))
+      print("\n\n\n")
+
       step_time += (time.time() - start_time) / config['steps_per_checkpoint']
-      loss += step_loss / config['steps_per_checkpoint']
+      loss += step_loss[0] / config['steps_per_checkpoint']
       current_step += 1
 
       # Once in a while, we save a checkpoint, print statistics, and run evals.
@@ -249,7 +267,9 @@ def train(config):
         if current_step % (config['steps_per_checkpoint'] * config['eval_frequency']) == 0:
           if config['eval_bleu']:
             if model.global_step.eval() >= config['eval_bleu_start']:
-              current_bleu = train_utils.decode_dev(config, model, current_bleu)
+              current_bleu = train_utils.decode_dev(config, model, current_bleu, eval_no)
+              idek = train_utils.decode_dev_feed(config, model, eval_no)
+              eval_no += 1
             else:
               logging.info("Waiting until global step %i for BLEU evaluation on dev" % config['eval_bleu_start'])
           else:
